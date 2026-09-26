@@ -8,7 +8,7 @@
 // account. The database trigger (supabase/01_auth.sql) is what actually
 // enforces it, so keep the two lists in step.
 
-export const SUPABASE_URL = 'https://yoyjdwvmpuyllzfsfisl.supabase.co';
-export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_B8lQfa2FZr9vdgeDQMxlHQ_SZjVP-Vd';
+export const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_REPLACE_ME';
 
 export const ALLOWED_DOMAINS = ['iiml.ac.in'];

@@ -1,4 +1,6 @@
-# CampusPulse AI — Part 1: Sign-in with Google (OAuth 2.0)
+# CampusPulse AI
+
+Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker.
 
 Static site (HTML/CSS/vanilla JS, no build step) hosted on GitHub Pages, with
 Supabase Auth handling Google sign-in.
@@ -27,14 +29,20 @@ read only their own profile and change only their display name.
 
 ```
 index.html            sign-in page
-app.html              signed-in page (protected)
+app.html              home: greeting, Coming up, account (protected)
+deadlines.html        deadline tracker (protected)
 css/styles.css
 js/config.js          Supabase URL, publishable key, allowed domains
 js/supabaseClient.js  Supabase client (PKCE flow)
 js/auth.js            sign-in / sign-out / session checks
 js/login.js           sign-in page logic
-js/app.js             signed-in page logic
-supabase/01_auth.sql  tables, triggers and security rules
+js/shell.js           shared set-up for signed-in pages (session, top bar)
+js/app.js             home page logic
+js/deadlines-data.js  reads/writes the deadlines table (only module that does)
+js/deadline-format.js due-date wording, categories, date helpers
+js/deadlines-page.js  deadlines page logic
+supabase/01_auth.sql       Part 1: profiles, domain rule, security
+supabase/02_deadlines.sql  Part 2: deadlines table and security
 ```
 
 ## Setup
@@ -55,3 +63,11 @@ update public.profiles set role = 'cr' where email = 'someone@iiml.ac.in';
 -- allow personal Gmail accounts while testing (also add 'gmail.com' to js/config.js)
 insert into public.allowed_email_domains values ('gmail.com');
 ```
+
+## Part 2: Deadline tracker
+
+Run `supabase/02_deadlines.sql` once in the SQL Editor. Each deadline has a
+title, category, optional course, due date/time (stored in UTC, shown in
+local time), optional link and notes, and a done/pending status. Row Level
+Security limits every student to their own deadlines. The `source` column
+(`manual`, `email`, `cr`) is ready for the email-parsing and CR parts.

@@ -1,8 +1,8 @@
-// app.js — the signed-in home page (app.html). Part 1 shows who you are;
-// later parts add the dashboard modules here.
+// app.js — the signed-in home page (app.html).
 
-import { isConfigured } from './supabaseClient.js';
-import { requireUser, getProfile, signOut, watchForSignOut, goToSignIn } from './auth.js';
+import { startSignedInPage, finishLoading } from './shell.js';
+import { listDeadlines } from './deadlines-data.js';
+import { CATEGORIES, isOverdue, urgency, dueText, daysFromToday } from './deadline-format.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,64 +15,89 @@ function greeting() {
   return 'Good evening';
 }
 
-function formatDate(iso) {
+function formatDateTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function initials(name, email) {
-  const parts = (name || email || '?').trim().split(/\s+/);
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
-function renderAvatar(el, url, name, email) {
-  el.textContent = '';
-  if (!url) { el.textContent = initials(name, email); return; }
-  const img = document.createElement('img');
-  img.src = url;
-  img.alt = '';
-  img.referrerPolicy = 'no-referrer'; // Google profile photos need this
-  img.addEventListener('error', () => { el.textContent = initials(name, email); });
-  el.appendChild(img);
+function summarySentence(overdue, thisWeek) {
+  if (!overdue && !thisWeek) return 'Nothing due in the next 7 days.';
+  const parts = [];
+  if (thisWeek) parts.push(`${plural(thisWeek, 'deadline')} in the next 7 days`);
+  if (overdue) parts.push(`${overdue} overdue`);
+  return `You have ${parts.join(' and ')}.`;
+}
+
+function renderUpcoming(deadlines) {
+  const now = new Date();
+  const pending = deadlines.filter((d) => d.status !== 'done');
+  const overdue = pending.filter((d) => isOverdue(d, now));
+  const upcoming = pending.filter((d) => !isOverdue(d, now));
+  const thisWeek = upcoming.filter((d) => daysFromToday(d.dueAt, now) <= 7);
+
+  $('upcomingSummary').textContent = summarySentence(overdue.length, thisWeek.length);
+
+  const list = $('upcomingList');
+  list.textContent = '';
+  const shown = [...overdue, ...upcoming].slice(0, 5);
+
+  if (!shown.length) {
+    $('upcomingEmpty').hidden = false;
+    return;
+  }
+  for (const d of shown) {
+    const li = document.createElement('li');
+    li.className = 'mini-row';
+    li.dataset.urgency = urgency(d, now);
+
+    const main = document.createElement('div');
+    const title = document.createElement('p');
+    title.className = 'mini-title';
+    title.textContent = d.title;
+    const meta = document.createElement('p');
+    meta.className = 'mini-meta';
+    meta.textContent = [CATEGORIES[d.category], d.course].filter(Boolean).join(', ');
+    main.append(title, meta);
+
+    const due = document.createElement('p');
+    due.className = 'mini-due';
+    due.textContent = dueText(d, now);
+
+    li.append(main, due);
+    list.appendChild(li);
+  }
 }
 
 async function init() {
-  if (!isConfigured()) { goToSignIn(); return; }
-
-  const user = await requireUser();
-  if (!user) return;
-
-  let profile = null;
-  let profileNote = '';
-  try {
-    profile = await getProfile(user.id);
-    if (!profile) profileNote = 'Your profile record is missing. Run supabase/01_auth.sql, then sign out and sign in again.';
-  } catch (err) {
-    profileNote = `Could not load your profile: ${err.message}`;
-  }
-
-  const meta = user.user_metadata || {};
-  const name = profile?.full_name || meta.full_name || meta.name || user.email;
-  const avatar = profile?.avatar_url || meta.avatar_url || meta.picture;
+  const ctx = await startSignedInPage();
+  if (!ctx) return;
+  const { user, profile, profileError, name } = ctx;
 
   $('greeting').textContent = `${greeting()}, ${name.split(/\s+/)[0]}.`;
-  $('userName').textContent = name;
-  renderAvatar($('userAvatar'), avatar, name, user.email);
-
   $('detailName').textContent = name;
   $('detailEmail').textContent = user.email;
   $('detailRole').textContent = ROLE_LABELS[profile?.role] || 'Student';
-  $('detailSince').textContent = formatDate(profile?.created_at || user.created_at);
-  $('detailLast').textContent = formatDate(user.last_sign_in_at);
+  $('detailSince').textContent = formatDateTime(profile?.created_at || user.created_at);
+  $('detailLast').textContent = formatDateTime(user.last_sign_in_at);
 
-  if (profileNote) {
-    $('profileNote').textContent = profileNote;
-    $('profileNote').hidden = false;
+  const note = profileError
+    ? `Could not load your profile: ${profileError}`
+    : !profile
+      ? 'Your profile record is missing. Run supabase/01_auth.sql, then sign out and sign in again.'
+      : '';
+  if (note) { $('profileNote').textContent = note; $('profileNote').hidden = false; }
+
+  try {
+    renderUpcoming(await listDeadlines());
+  } catch (err) {
+    $('upcomingSummary').textContent = `Could not load deadlines: ${err.message}`;
   }
 
-  $('signOutBtn').addEventListener('click', signOut);
-  watchForSignOut();
-  document.body.classList.remove('is-loading');
+  finishLoading();
 }
 
 init();

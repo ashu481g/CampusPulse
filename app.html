@@ -22,6 +22,10 @@
 
 <header class="topbar">
   <p class="wordmark">CampusPulse AI</p>
+  <nav class="mainnav" aria-label="Main">
+    <a href="app.html" aria-current="page">Home</a>
+    <a href="deadlines.html">Deadlines</a>
+  </nav>
   <div class="user-chip">
     <span class="avatar" id="userAvatar" aria-hidden="true"></span>
     <span class="user-name" id="userName"></span>
@@ -31,9 +35,21 @@
 
 <main class="home">
   <h1 class="greeting" id="greeting"></h1>
-  <p class="home-lead">You're signed in with your institute account. Your dashboard modules will appear here as each part is built.</p>
+  <p class="home-lead">Here is what needs your attention. More modules will appear as each part is built.</p>
 
   <p class="notice" id="profileNote" role="alert" hidden></p>
+
+  <section class="panel upcoming-panel" aria-labelledby="upcomingHeading">
+    <div class="panel-head">
+      <h2 id="upcomingHeading">Coming up</h2>
+      <a class="panel-link" href="deadlines.html">Open deadlines</a>
+    </div>
+    <p class="upcoming-summary" id="upcomingSummary">Loading deadlines…</p>
+    <ul class="mini-list" id="upcomingList"></ul>
+    <p class="upcoming-empty" id="upcomingEmpty" hidden>
+      <a href="deadlines.html">Add your first deadline</a> to see it here.
+    </p>
+  </section>
 
   <div class="home-grid">
     <section class="panel" aria-labelledby="accountHeading">
@@ -52,7 +68,7 @@
       <ul class="modules">
         <li><span>Sign-in with your IIML Google account</span><span class="status status-done">Ready</span></li>
         <li><span>Deadlines pulled from your email</span><span class="status">Not built yet</span></li>
-        <li><span>Assignment tracker</span><span class="status">Not built yet</span></li>
+        <li><span>Assignment and deadline tracker</span><span class="status status-done">Ready</span></li>
         <li><span>Attendance tracker</span><span class="status">Not built yet</span></li>
         <li><span>Case competition tracker</span><span class="status">Not built yet</span></li>
         <li><span>Daily reminders</span><span class="status">Not built yet</span></li>

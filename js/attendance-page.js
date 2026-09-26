@@ -97,7 +97,14 @@ function renderMarking() {
     li.dataset.status = rec?.status || 'none';
 
     const info = el('div', 'mark-info');
-    info.append(el('p', 'mark-name', subjectLabel(s)));
+    const nameLine = el('p', 'mark-name');
+    nameLine.append(subjectLabel(s), ' ');
+    const editBtn = el('button', 'link-btn mark-edit', 'Edit');
+    editBtn.type = 'button';
+    editBtn.setAttribute('aria-label', `Edit ${s.name}`);
+    editBtn.addEventListener('click', () => openSubjectDialog(s));
+    nameLine.appendChild(editBtn);
+    info.append(nameLine);
     info.append(el('p', 'mark-stat', stats.total
       ? `${formatPercent(stats.percentage)}, ${marginText(stats, state.target).toLowerCase()}`
       : 'No classes marked yet'));
@@ -152,7 +159,7 @@ function renderSubjects() {
     hist.addEventListener('click', () => openHistory(s.id));
     const edit = el('button', 'btn-quiet', 'Edit');
     edit.type = 'button';
-    edit.setAttribute('aria-label', `Edit ${s.name}`);
+    edit.setAttribute('aria-label', `Edit subject ${s.name}`);
     edit.addEventListener('click', () => openSubjectDialog(s));
     actions.append(hist, edit);
 
@@ -405,6 +412,11 @@ function wire() {
   $('cancelSubjectBtn').addEventListener('click', () => $('subjectDialog').close());
   $('deleteSubjectBtn').addEventListener('click', deleteSubject);
   $('closeHistoryBtn').addEventListener('click', () => $('historyDialog').close());
+  $('historyEditBtn').addEventListener('click', () => {
+    const s = state.subjects.find((x) => x.id === state.historySubjectId);
+    $('historyDialog').close();
+    if (s) openSubjectDialog(s);
+  });
 
   $('prevDay').addEventListener('click', () => setDate(shiftIso(state.date, -1)));
   $('nextDay').addEventListener('click', () => setDate(shiftIso(state.date, 1)));

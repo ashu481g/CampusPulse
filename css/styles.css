@@ -650,3 +650,6 @@ tr[data-tone="edge"] .att-margin { color: var(--amber-ink); font-weight: 600; }
   .history-delete { justify-self: start; }
   .att-home-body { align-items: flex-start; flex-direction: column; gap: 0.5rem; }
 }
+
+/* Edit link beside each subject name in the marking list */
+.mark-edit { font-size: 0.85rem; font-weight: 600; margin-left: 0.35rem; }

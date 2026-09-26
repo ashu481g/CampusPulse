@@ -66,7 +66,18 @@ async function gmail(token, path) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401) { cached = { token: null, expires: 0 }; throw new Error('Gmail access has expired. Press Scan again to reconnect.'); }
-  if (res.status === 403) throw new Error('Gmail refused access. Your institute may not allow this app to read mail; use "Paste an email" instead.');
+  if (res.status === 403) {
+    // Show Google's real reason instead of guessing.
+    let reason = '';
+    try { reason = (await res.json())?.error?.message || ''; } catch { /* no body */ }
+    if (/has not been used|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(reason)) {
+      throw new Error('The Gmail API is switched off in your Google Cloud project. Enable "Gmail API" under APIs & Services → Library, wait a minute, then scan again.');
+    }
+    if (/insufficient|scope/i.test(reason)) {
+      throw new Error('Google did not grant read access to Gmail. Press Disconnect Gmail, scan again, and tick the box that allows reading your email.');
+    }
+    throw new Error(`Gmail refused access: ${reason || 'no reason given'}. If your institute blocks this app, use "Paste an email" instead.`);
+  }
   if (!res.ok) throw new Error(`Gmail error ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return res.json();
 }

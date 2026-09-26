@@ -127,6 +127,9 @@ async function askGemini(email, retried = false) {
     if (!retried) { await sleep(20000); return askGemini(email, true); }
     throw new Error('Gemini is busy (too many requests per minute). Wait a minute and scan again.');
   }
+  if (res.status === 402) {
+    throw new Error('Gemini says this key\'s project needs prepaid credit (it is on a paid plan, not the free tier). Create the key in a project without billing: see the setup notes.');
+  }
   if (!res.ok) throw new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
   const parts = data.candidates?.[0]?.content?.parts || [];

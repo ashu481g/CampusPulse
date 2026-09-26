@@ -8,7 +8,7 @@ import { getGmailToken, disconnectGmail, buildQuery, listMessageIds, getMessage 
 import { CATEGORIES, toDateInput, toTimeInput, fromInputs, formatDate } from './deadline-format.js';
 
 const $ = (id) => document.getElementById(id);
-const BATCH = 5;          // emails per call to the extract function
+const BATCH = 3;          // emails per call to the extract function (keeps free AI tiers happy)
 const MAX_SCAN = 40;      // emails looked at per scan
 
 const state = { suggestions: [], deadlines: [], email: '' };
@@ -221,7 +221,7 @@ async function extractAll(emails, progressId) {
     } catch (err) {
       failed += Math.min(BATCH, emails.length - i);
       lastError = err.message;
-      if (/ANTHROPIC_API_KEY|Could not reach|session/i.test(err.message)) throw err; // no point continuing
+      if (/API_KEY|No AI key|daily limit|Could not reach|session/i.test(err.message)) throw err; // no point continuing
     }
   }
   return { found, failed, lastError };

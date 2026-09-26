@@ -2,12 +2,15 @@
 //
 // Called by a signed-in student from the "From email" page with up to 10
 // emails (from their Gmail, fetched in their own browser, or pasted text).
-// For each email it asks Claude to list any actionable deadlines, then saves
-// them as suggestions for the student to accept or dismiss.
+// For each email it asks an AI model to list any actionable deadlines, then
+// saves them as suggestions for the student to accept or dismiss.
 //
-// Secrets (Edge Functions -> Secrets):
-//   ANTHROPIC_API_KEY   (required)  from the Claude Console -> API keys
-//   EXTRACT_MODEL       (optional)  default claude-haiku-4-5-20251001
+// Choose ONE AI provider by adding its key under Edge Functions -> Secrets:
+//   GEMINI_API_KEY      Google Gemini (has a free tier) — used if present
+//   ANTHROPIC_API_KEY   Anthropic Claude — used if no Gemini key is set
+// Optional:
+//   GEMINI_MODEL        default gemini-flash-lite-latest
+//   EXTRACT_MODEL       Claude model, default claude-haiku-4-5-20251001
 //
 // Deploy with "Verify JWT" turned OFF: this function checks the caller itself.
 
@@ -59,10 +62,26 @@ Rules:
 - Skip newsletters, adverts, general announcements, events that need no action, and anything with no concrete date.
 - If there is nothing, return {"deadlines":[]}.`;
 
-async function askClaude(email) {
-  const body = String(email.body || '').slice(0, MAX_BODY);
-  const user = `Email sent: ${email.date || 'unknown'}\nFrom: ${email.from || 'unknown'}\nSubject: ${email.subject || '(no subject)'}\n\n<email>\n${body}\n</email>`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function emailPrompt(email) {
+  const body = String(email.body || '').slice(0, MAX_BODY);
+  return `Email sent: ${email.date || 'unknown'}\nFrom: ${email.from || 'unknown'}\nSubject: ${email.subject || '(no subject)'}\n\n<email>\n${body}\n</email>`;
+}
+
+function parseDeadlines(text) {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end < start) return [];
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1));
+    return Array.isArray(parsed.deadlines) ? parsed.deadlines : [];
+  } catch {
+    return [];
+  }
+}
+
+async function askClaude(email) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -74,22 +93,47 @@ async function askClaude(email) {
       model: Deno.env.get('EXTRACT_MODEL') || 'claude-haiku-4-5-20251001',
       max_tokens: 1200,
       system: SYSTEM,
-      messages: [{ role: 'user', content: user }],
+      messages: [{ role: 'user', content: emailPrompt(email) }],
     }),
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
-  const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end < start) return [];
-  try {
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    return Array.isArray(parsed.deadlines) ? parsed.deadlines : [];
-  } catch {
-    return [];
-  }
+  return parseDeadlines((data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join(''));
 }
+
+// Gemini's free tier allows only a few requests per minute, so calls are
+// spaced out and a rate-limited call is retried once after a pause.
+let lastGeminiCall = 0;
+async function askGemini(email, retried = false) {
+  const gap = 4500 - (Date.now() - lastGeminiCall);
+  if (gap > 0) await sleep(gap);
+  lastGeminiCall = Date.now();
+
+  const model = Deno.env.get('GEMINI_MODEL') || 'gemini-flash-lite-latest';
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': Deno.env.get('GEMINI_API_KEY'), 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: 'user', parts: [{ text: emailPrompt(email) }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 1200, responseMimeType: 'application/json' },
+    }),
+  });
+  if (res.status === 429) {
+    const detail = await res.text();
+    if (/per day|PerDay|daily/i.test(detail)) {
+      throw new Error("Gemini's free daily limit is used up. Try again tomorrow, or scan fewer days.");
+    }
+    if (!retried) { await sleep(20000); return askGemini(email, true); }
+    throw new Error('Gemini is busy (too many requests per minute). Wait a minute and scan again.');
+  }
+  if (!res.ok) throw new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  return parseDeadlines(parts.map((p) => p.text || '').join(''));
+}
+
+const askModel = (email) => (Deno.env.get('GEMINI_API_KEY') ? askGemini(email) : askClaude(email));
 
 // Turns one raw item from Claude into a row, or null if it is unusable or already past.
 function toRow(item, email, userId, now) {
@@ -123,7 +167,9 @@ function toRow(item, email, userId, now) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405);
-  if (!Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'ANTHROPIC_API_KEY secret is not set.' }, 500);
+  if (!Deno.env.get('GEMINI_API_KEY') && !Deno.env.get('ANTHROPIC_API_KEY')) {
+    return json({ error: 'No AI key is set. Add GEMINI_API_KEY (or ANTHROPIC_API_KEY) under Edge Functions -> Secrets.' }, 500);
+  }
 
   const admin = createClient(Deno.env.get('SUPABASE_URL'), secretKey(), { auth: { persistSession: false } });
 
@@ -151,7 +197,7 @@ Deno.serve(async (req) => {
     const isGmail = email.source !== 'paste' && email.id;
     if (isGmail && seen.has(String(email.id))) { results.push({ id: email.id, skipped: true, found: 0 }); continue; }
     try {
-      const items = await askClaude(email);
+      const items = await askModel(email);
       const rows = items.map((i) => toRow(i, email, userId, now)).filter(Boolean).slice(0, 10);
       if (rows.length) {
         const { error } = await admin.from('email_suggestions').insert(rows);

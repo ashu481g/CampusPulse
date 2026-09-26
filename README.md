@@ -142,14 +142,14 @@ also checks that a linked competition belongs to the same student.
   (Google Identity Services, scope `gmail.readonly`). The token lives only in
   memory for about an hour; nothing about it is stored on the server.
 - The browser sends up to 5 emails at a time to the `extract-deadlines` Edge
-  Function, which asks Claude (default `claude-haiku-4-5-20251001`) for dated,
+  Function, which asks an AI model (Gemini if `GEMINI_API_KEY` is set, otherwise Claude) for dated,
   actionable items, validates them (IST, skips past dates) and stores them
   in `email_suggestions`. Analysed Gmail ids go into `email_processed` so a
   re-scan skips them.
 - Nothing becomes a deadline until the student presses "Add to deadlines";
   those deadlines get `source = 'email'`. Pasting an email works without
   Gmail access.
-- Function secrets: `ANTHROPIC_API_KEY` (required), `EXTRACT_MODEL` (optional).
+- Function secrets: `GEMINI_API_KEY` (free tier; default model `gemini-flash-lite-latest`, override with `GEMINI_MODEL`) or `ANTHROPIC_API_KEY` (default `claude-haiku-4-5-20251001`, override with `EXTRACT_MODEL`). Gemini calls are spaced ~4.5 s apart to respect free-tier per-minute limits.
   Deploy with JWT verification off.
 - `gmail.readonly` is a restricted Google scope. In Testing mode only listed
   test users can grant it (with an "unverified app" warning); opening it to

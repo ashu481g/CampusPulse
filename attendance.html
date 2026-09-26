@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Attendance · CampusPulse AI</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%238C1D2B'/><path d='M4 17h7l3-8 4 14 3-6h7' fill='none' stroke='white' stroke-width='2.6' stroke-linejoin='round' stroke-linecap='round'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="app-page is-loading">
+
+<div class="loading-screen" aria-live="polite">
+  <svg class="pulse pulse-small" viewBox="0 0 300 100" aria-hidden="true">
+    <path class="pulse-line" pathLength="1"
+      d="M0 65 H110 L122 65 L134 30 L150 92 L166 10 L180 75 L190 65 H300" />
+  </svg>
+  <p>Loading your attendance…</p>
+</div>
+
+<header class="topbar">
+  <p class="wordmark">CampusPulse AI</p>
+  <nav class="mainnav" aria-label="Main">
+    <a href="app.html">Home</a>
+    <a href="deadlines.html">Deadlines</a>
+    <a href="attendance.html" aria-current="page">Attendance</a>
+  </nav>
+  <div class="user-chip">
+    <span class="avatar" id="userAvatar" aria-hidden="true"></span>
+    <span class="user-name" id="userName"></span>
+    <button type="button" class="btn-quiet" id="signOutBtn">Sign out</button>
+  </div>
+</header>
+
+<main class="home attendance">
+  <div class="page-head">
+    <h1 class="page-title">Attendance</h1>
+    <button type="button" class="btn-primary" id="addSubjectBtn">Add subject</button>
+  </div>
+
+  <p class="notice" id="loadError" role="alert" hidden></p>
+
+  <!-- Overall figure with the target line -->
+  <section class="panel att-overview" aria-label="Overall attendance">
+    <div class="att-overall">
+      <p class="att-big" id="overallPercent">—</p>
+      <div>
+        <p class="att-overall-line" id="overallLine">No classes marked yet.</p>
+        <label class="att-target">
+          Target
+          <input type="number" id="targetInput" min="1" max="100" step="1" inputmode="numeric" />
+          %
+        </label>
+      </div>
+    </div>
+    <div class="meter meter-large" id="overallMeter" aria-hidden="true">
+      <span class="meter-fill"></span><span class="meter-target"></span>
+    </div>
+  </section>
+
+  <!-- Marking -->
+  <section class="panel" aria-labelledby="markHeading">
+    <div class="panel-head mark-head">
+      <h2 id="markHeading">Mark attendance</h2>
+      <div class="date-nav">
+        <button type="button" class="btn-quiet icon-btn" id="prevDay" aria-label="Previous day">‹</button>
+        <label class="visually-hidden" for="markDate">Date</label>
+        <input type="date" id="markDate" />
+        <button type="button" class="btn-quiet icon-btn" id="nextDay" aria-label="Next day">›</button>
+        <button type="button" class="btn-quiet" id="todayBtn">Today</button>
+      </div>
+    </div>
+    <p class="mark-date-label" id="markDateLabel"></p>
+    <ul class="mark-list" id="markList"></ul>
+    <p class="upcoming-empty" id="markEmpty" hidden>Add your first subject to start marking attendance.</p>
+  </section>
+
+  <!-- Per-subject summary -->
+  <section class="panel" aria-labelledby="subjectsHeading">
+    <h2 id="subjectsHeading">By subject</h2>
+    <div class="table-wrap">
+      <table class="att-table" id="subjectTable">
+        <thead>
+          <tr>
+            <th scope="col">Subject</th>
+            <th scope="col" class="num">Attended</th>
+            <th scope="col">Attendance</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="subjectRows"></tbody>
+      </table>
+    </div>
+    <p class="upcoming-empty" id="subjectsEmpty" hidden>No subjects yet.</p>
+  </section>
+
+  <section class="import-note">
+    <p>
+      Moving from the Attendance Register app? Export a backup there (Data Management → Export backup), then
+      <button type="button" class="link-btn" id="importBtn">import the backup file</button>.
+      Subjects with the same name are merged, and marks you already have here are kept.
+    </p>
+    <input type="file" id="importFile" accept=".json,application/json" hidden />
+  </section>
+</main>
+
+<!-- Add / edit subject -->
+<dialog class="dl-dialog" id="subjectDialog" aria-labelledby="subjectDialogTitle">
+  <form id="subjectForm" novalidate>
+    <h2 id="subjectDialogTitle">Add subject</h2>
+    <label for="subName">Name</label>
+    <input id="subName" name="subName" type="text" maxlength="120" required placeholder="Marketing Management" />
+    <label for="subCode">Code <span class="optional">(optional)</span></label>
+    <input id="subCode" name="subCode" type="text" maxlength="30" placeholder="MM-II" />
+    <label for="subDesc">Description <span class="optional">(optional)</span></label>
+    <textarea id="subDesc" name="subDesc" rows="2" maxlength="500" placeholder="Section B, Prof. Sharma"></textarea>
+    <p class="form-error" id="subjectError" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn-danger" id="deleteSubjectBtn" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn-quiet" id="cancelSubjectBtn">Cancel</button>
+      <button type="submit" class="btn-primary" id="saveSubjectBtn">Add subject</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- History for one subject -->
+<dialog class="dl-dialog history-dialog" id="historyDialog" aria-labelledby="historyTitle">
+  <div class="history-inner">
+    <h2 id="historyTitle">History</h2>
+    <p class="history-summary" id="historySummary"></p>
+    <ul class="history-list" id="historyList"></ul>
+    <p class="upcoming-empty" id="historyEmpty" hidden>No classes marked for this subject yet.</p>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn-primary" id="closeHistoryBtn">Done</button>
+    </div>
+  </div>
+</dialog>
+
+<p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
+
+<script type="module" src="js/attendance-page.js"></script>
+</body>
+</html>

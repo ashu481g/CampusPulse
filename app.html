@@ -25,6 +25,7 @@
   <nav class="mainnav" aria-label="Main">
     <a href="app.html" aria-current="page">Home</a>
     <a href="deadlines.html">Deadlines</a>
+    <a href="attendance.html">Attendance</a>
   </nav>
   <div class="user-chip">
     <span class="avatar" id="userAvatar" aria-hidden="true"></span>
@@ -51,6 +52,21 @@
     </p>
   </section>
 
+  <section class="panel att-home" aria-labelledby="attHomeHeading">
+    <div class="panel-head">
+      <h2 id="attHomeHeading">Attendance</h2>
+      <a class="panel-link" href="attendance.html">Mark attendance</a>
+    </div>
+    <div class="att-home-body">
+      <p class="att-home-big" id="attHomePercent">—</p>
+      <div class="att-home-text">
+        <p class="upcoming-summary" id="attHomeSummary">Loading attendance…</p>
+        <div class="meter" id="attHomeMeter" aria-hidden="true"><span class="meter-fill"></span><span class="meter-target"></span></div>
+      </div>
+    </div>
+    <ul class="mini-list" id="attHomeList"></ul>
+  </section>
+
   <div class="home-grid">
     <section class="panel" aria-labelledby="accountHeading">
       <h2 id="accountHeading">Your account</h2>
@@ -69,7 +85,7 @@
         <li><span>Sign-in with your IIML Google account</span><span class="status status-done">Ready</span></li>
         <li><span>Deadlines pulled from your email</span><span class="status">Not built yet</span></li>
         <li><span>Assignment and deadline tracker</span><span class="status status-done">Ready</span></li>
-        <li><span>Attendance tracker</span><span class="status">Not built yet</span></li>
+        <li><span>Attendance tracker</span><span class="status status-done">Ready</span></li>
         <li><span>Case competition tracker</span><span class="status">Not built yet</span></li>
         <li><span>Daily reminders</span><span class="status">Not built yet</span></li>
       </ul>

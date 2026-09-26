@@ -3,6 +3,8 @@
 import { startSignedInPage, finishLoading } from './shell.js';
 import { listDeadlines } from './deadlines-data.js';
 import { CATEGORIES, isOverdue, urgency, dueText, daysFromToday } from './deadline-format.js';
+import { loadAll as loadAttendance } from './attendance-data.js';
+import { statsFor, margin, marginText, formatPercent } from './attendance-calc.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -72,6 +74,62 @@ function renderUpcoming(deadlines) {
   }
 }
 
+// Overall figure plus the subjects that need attention (below target or no margin left).
+function renderAttendance({ subjects, records, target }) {
+  const overall = statsFor(records);
+  $('attHomePercent').textContent = formatPercent(overall.percentage);
+  const meter = $('attHomeMeter');
+  meter.querySelector('.meter-fill').style.width = `${overall.percentage ?? 0}%`;
+  meter.querySelector('.meter-target').style.left = `${target}%`;
+
+  if (!subjects.length) {
+    $('attHomeSummary').innerHTML = '';
+    const a = document.createElement('a');
+    a.href = 'attendance.html';
+    a.textContent = 'Add your subjects';
+    $('attHomeSummary').append(a, ' to start tracking attendance.');
+    meter.hidden = true;
+    return;
+  }
+
+  const rows = subjects.map((s) => {
+    const stats = statsFor(records.filter((r) => r.subjectId === s.id));
+    return { s, stats, m: margin(stats, target) };
+  });
+  const below = rows.filter((r) => r.m.kind === 'below' || r.m.kind === 'unreachable');
+  const edge = rows.filter((r) => r.m.kind === 'safe' && r.m.canMiss === 0);
+  meter.dataset.tone = overall.total && overall.percentage < target ? 'below' : 'safe';
+
+  let summary = overall.total
+    ? `${overall.attended} of ${overall.total} classes attended. `
+    : 'No classes marked yet. ';
+  if (below.length) summary += `${below.length} subject${below.length === 1 ? ' is' : 's are'} below your ${target}% target.`;
+  else if (edge.length) summary += `All subjects meet your ${target}% target, but some have no room to miss a class.`;
+  else if (overall.total) summary += `All subjects meet your ${target}% target.`;
+  $('attHomeSummary').textContent = summary;
+
+  const list = $('attHomeList');
+  list.textContent = '';
+  for (const { s, stats, m } of [...below, ...edge].slice(0, 4)) {
+    const li = document.createElement('li');
+    li.className = 'mini-row';
+    li.dataset.urgency = m.kind === 'safe' ? 'today' : 'overdue';
+    const main = document.createElement('div');
+    const t = document.createElement('p');
+    t.className = 'mini-title';
+    t.textContent = s.name;
+    const meta = document.createElement('p');
+    meta.className = 'mini-meta';
+    meta.textContent = `${formatPercent(stats.percentage)} (${stats.attended} of ${stats.total})`;
+    main.append(t, meta);
+    const due = document.createElement('p');
+    due.className = 'mini-due';
+    due.textContent = marginText(stats, target);
+    li.append(main, due);
+    list.appendChild(li);
+  }
+}
+
 async function init() {
   const ctx = await startSignedInPage();
   if (!ctx) return;
@@ -95,6 +153,13 @@ async function init() {
     renderUpcoming(await listDeadlines());
   } catch (err) {
     $('upcomingSummary').textContent = `Could not load deadlines: ${err.message}`;
+  }
+
+  try {
+    renderAttendance(await loadAttendance());
+  } catch (err) {
+    $('attHomeSummary').textContent = `Could not load attendance: ${err.message}`;
+    $('attHomeMeter').hidden = true;
   }
 
   finishLoading();

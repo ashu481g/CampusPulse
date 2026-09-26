@@ -808,3 +808,66 @@ tr[data-tone="edge"] .att-margin { color: var(--amber-ink); font-weight: 600; }
 
 .page-head .btn-primary { white-space: nowrap; }
 @media (max-width: 460px) { .page-head { flex-wrap: wrap; } }
+
+/* ============================================================
+   Part 6 — Deadlines from email
+   ============================================================ */
+.email-sources { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+.email-sources .panel { display: flex; flex-direction: column; gap: 0.35rem; }
+.email-sources h2 { margin-bottom: 0.4rem; }
+.email-sources label { font-size: 0.88rem; font-weight: 600; margin-top: 0.4rem; }
+.email-sources input[type="text"], .email-sources textarea, .email-sources select {
+  font: 400 0.95rem var(--font); color: var(--ink); background: var(--surface); width: 100%;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem;
+}
+.email-sources textarea { resize: vertical; }
+.scan-options { grid-template-columns: 1fr; }
+.email-sources .form-actions { margin-top: 0.9rem; }
+.notice-soft { margin: 0 0 0.6rem; font-size: 0.9rem; }
+.notice code { font-size: 0.85em; }
+
+.scan-progress {
+  margin: 0.8rem 0 0; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm);
+  font-size: 0.92rem; background: var(--ground);
+}
+.scan-progress[data-kind="ok"] { background: #E8F3ED; color: #155336; }
+.scan-progress[data-kind="error"] { background: var(--maroon-tint); color: var(--maroon-deep); }
+.fine-print { margin: 1rem 0 0; font-size: 0.82rem; color: var(--ink-soft); }
+.fine-print .link-btn { font-size: inherit; }
+
+.review { margin-top: 2rem; }
+.review-head { align-items: center; margin-bottom: 0.9rem; }
+.review-head h2 { font-size: 1.3rem; margin: 0; }
+.review-head .tab-count {
+  font-size: 0.85rem; background: var(--maroon); color: #fff; opacity: 1;
+  padding: 0.1rem 0.5rem; border-radius: 999px; vertical-align: middle; margin-left: 0.3rem;
+}
+.suggestion-list { display: flex; flex-direction: column; gap: 1rem; }
+.suggestion {
+  background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--maroon);
+  border-radius: var(--radius-lg); padding: 1.1rem 1.2rem;
+}
+.suggestion[data-confidence="low"] { border-left-color: var(--amber); }
+.suggestion p { margin: 0; }
+.sg-source { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: 0.7rem !important; overflow-wrap: anywhere; }
+.sg-fields { display: grid; grid-template-columns: 1fr 1.3fr 1fr 0.8fr; gap: 0.6rem; }
+.sg-fields > div { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.sg-title { grid-column: 1 / -1; }
+.sg-title input { font-weight: 600; font-size: 1rem !important; }
+.sg-fields label { font-size: 0.8rem; font-weight: 600; color: var(--ink-soft); }
+.sg-fields input, .sg-fields select {
+  font: 400 0.93rem var(--font); color: var(--ink); background: var(--surface); width: 100%;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.45rem 0.55rem;
+}
+.sg-note { margin-top: 0.6rem !important; font-size: 0.87rem; color: var(--amber-ink); }
+.sg-detail { margin-top: 0.6rem !important; font-size: 0.9rem; color: var(--ink-soft); }
+.sg-link { display: inline-block; margin-top: 0.5rem; color: var(--maroon); font-weight: 600; font-size: 0.9rem; }
+.sg-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.9rem; }
+
+.email-nudge { margin: -0.4rem 0 0.8rem; font-size: 0.93rem; }
+.email-nudge a { color: var(--maroon); font-weight: 700; }
+
+@media (max-width: 860px) {
+  .email-sources { grid-template-columns: 1fr; }
+  .sg-fields { grid-template-columns: 1fr 1fr; }
+}

@@ -29,6 +29,7 @@ const toRow = (d) => ({
   notes: d.notes || '',
   // Only sent when given, so editing from the Deadlines page keeps the link.
   ...(d.competitionId !== undefined ? { competition_id: d.competitionId } : {}),
+  ...(d.source ? { source: d.source } : {}),
 });
 
 function check({ data, error }) {

@@ -4,6 +4,7 @@ import { startSignedInPage, finishLoading } from './shell.js';
 import { listDeadlines } from './deadlines-data.js';
 import { CATEGORIES, isOverdue, urgency, dueText, daysFromToday } from './deadline-format.js';
 import { loadAll as loadAttendance } from './attendance-data.js';
+import { countPending as countEmailSuggestions } from './email-data.js';
 import { statsFor, margin, marginText, formatPercent } from './attendance-calc.js';
 
 const $ = (id) => document.getElementById(id);
@@ -154,6 +155,18 @@ async function init() {
   } catch (err) {
     $('upcomingSummary').textContent = `Could not load deadlines: ${err.message}`;
   }
+
+  try {
+    const n = await countEmailSuggestions();
+    if (n) {
+      const nudge = $('emailNudge');
+      const a = document.createElement('a');
+      a.href = 'email.html';
+      a.textContent = `${n} deadline${n === 1 ? '' : 's'} found in your email`;
+      nudge.append(a, n === 1 ? ' is waiting for your review.' : ' are waiting for your review.');
+      nudge.hidden = false;
+    }
+  } catch { /* email import not set up yet */ }
 
   try {
     renderAttendance(await loadAttendance());

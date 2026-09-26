@@ -1,6 +1,6 @@
 # CampusPulse AI
 
-Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker. Part 3: Attendance. Part 4: Daily reminders. Part 5: Case competition tracker.
+Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker. Part 3: Attendance. Part 4: Daily reminders. Part 5: Case competition tracker. Part 6: Deadlines from email.
 
 Static site (HTML/CSS/vanilla JS, no build step) hosted on GitHub Pages, with
 Supabase Auth handling Google sign-in.
@@ -34,6 +34,7 @@ deadlines.html        deadline tracker (protected)
 attendance.html       attendance module (protected)
 reminders.html        daily reminder settings + test email (protected)
 competitions.html     case competition tracker (protected)
+email.html            deadlines found in Gmail / pasted emails, for review (protected)
 css/styles.css
 js/config.js          Supabase URL, publishable key, allowed domains
 js/supabaseClient.js  Supabase client (PKCE flow)
@@ -52,11 +53,17 @@ js/reminders-page.js  reminders page logic
 js/competitions-data.js  case_competitions + linked key dates
 js/competition-stages.js stage/outcome names, date suggestions
 js/competitions-page.js  competitions page logic
+js/google-config.js   Google OAuth Client ID for Gmail (public)
+js/gmail.js           reads Gmail in the browser (read-only token, memory only)
+js/email-data.js      suggestions, extract-deadlines call, accept/dismiss
+js/email-page.js      From email page logic
 supabase/01_auth.sql       Part 1: profiles, domain rule, security
 supabase/02_deadlines.sql  Part 2: deadlines table and security
 supabase/03_attendance.sql Part 3: attendance tables and security
 supabase/04_reminders.sql  Part 4: reminder settings, Vault secrets, hourly schedule
 supabase/05_competitions.sql Part 5: case_competitions, deadlines.competition_id
+supabase/06_email_import.sql Part 6: email_suggestions, email_processed
+supabase/functions/extract-deadlines/index.ts  Edge Function: emails -> Claude -> suggestions
 supabase/functions/daily-reminders/index.ts  Edge Function that builds and sends the emails
 ```
 
@@ -128,3 +135,22 @@ and category `case_competition`, so they show on the Deadlines page, Home and
 in reminder emails with no extra work. Renaming a competition updates the
 name shown on its dates; deleting it deletes them. The deadlines policy now
 also checks that a linked competition belongs to the same student.
+
+## Part 6: Deadlines from email
+
+- Gmail is read in the student's own browser with a read-only Google token
+  (Google Identity Services, scope `gmail.readonly`). The token lives only in
+  memory for about an hour; nothing about it is stored on the server.
+- The browser sends up to 5 emails at a time to the `extract-deadlines` Edge
+  Function, which asks Claude (default `claude-haiku-4-5-20251001`) for dated,
+  actionable items, validates them (IST, skips past dates) and stores them
+  in `email_suggestions`. Analysed Gmail ids go into `email_processed` so a
+  re-scan skips them.
+- Nothing becomes a deadline until the student presses "Add to deadlines";
+  those deadlines get `source = 'email'`. Pasting an email works without
+  Gmail access.
+- Function secrets: `ANTHROPIC_API_KEY` (required), `EXTRACT_MODEL` (optional).
+  Deploy with JWT verification off.
+- `gmail.readonly` is a restricted Google scope. In Testing mode only listed
+  test users can grant it (with an "unverified app" warning); opening it to
+  all students needs Google's verification and a security assessment.

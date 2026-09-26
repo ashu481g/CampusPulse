@@ -1,6 +1,6 @@
 # CampusPulse AI
 
-Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker. Part 3: Attendance.
+Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker. Part 3: Attendance. Part 4: Daily reminders.
 
 Static site (HTML/CSS/vanilla JS, no build step) hosted on GitHub Pages, with
 Supabase Auth handling Google sign-in.
@@ -32,6 +32,7 @@ index.html            sign-in page
 app.html              home: greeting, Coming up, account (protected)
 deadlines.html        deadline tracker (protected)
 attendance.html       attendance module (protected)
+reminders.html        daily reminder settings + test email (protected)
 css/styles.css
 js/config.js          Supabase URL, publishable key, allowed domains
 js/supabaseClient.js  Supabase client (PKCE flow)
@@ -45,9 +46,13 @@ js/deadlines-page.js  deadlines page logic
 js/attendance-data.js reads/writes att_subjects, att_records, att_settings
 js/attendance-calc.js attendance %, can-miss / must-attend maths
 js/attendance-page.js attendance page logic
+js/reminders-data.js  reminder_settings + test-email call
+js/reminders-page.js  reminders page logic
 supabase/01_auth.sql       Part 1: profiles, domain rule, security
 supabase/02_deadlines.sql  Part 2: deadlines table and security
 supabase/03_attendance.sql Part 3: attendance tables and security
+supabase/04_reminders.sql  Part 4: reminder settings, Vault secrets, hourly schedule
+supabase/functions/daily-reminders/index.ts  Edge Function that builds and sends the emails
 ```
 
 ## Setup
@@ -90,3 +95,20 @@ With attended `a`, total `t` and target `p`:
 Old data from the Attendance Register app: export a backup there and use
 "import the backup file" at the bottom of the Attendance page. Subjects are
 matched by name; existing marks for the same subject and day are kept.
+
+## Part 4: Daily reminders
+
+- `reminder_settings` holds each student's choices (on/off, hour in IST, days
+  ahead, include attendance, skip empty days) plus `last_sent_on` /
+  `last_status`, which only the function can write.
+- pg_cron calls the `daily-reminders` Edge Function every hour at :00 IST
+  (`30 * * * *` UTC) with a secret header; the secret lives in Vault and the
+  function checks it through `reminders_check_secret()`.
+- The function emails everyone whose hour it is and who hasn't had today's
+  email, via Resend. It also accepts a signed-in student's request for a
+  test email.
+- Function secrets: `RESEND_API_KEY`, `APP_URL`, optional `REMINDER_FROM`.
+  Deploy with JWT verification off (the function checks callers itself).
+- Resend without a verified domain only delivers to the address the Resend
+  account was created with. To email other students, verify a domain in
+  Resend and set `REMINDER_FROM` to an address on it.

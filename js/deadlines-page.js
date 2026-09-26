@@ -112,6 +112,12 @@ function rowFor(d, now) {
     course.textContent = d.course;
     meta.appendChild(course);
   }
+  if (d.competitionId) {
+    const c = document.createElement('a');
+    c.href = `competitions.html?open=${encodeURIComponent(d.competitionId)}`;
+    c.textContent = 'Open competition';
+    meta.appendChild(c);
+  }
   if (d.link) {
     const a = document.createElement('a');
     a.href = d.link;

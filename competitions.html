@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Case competitions · CampusPulse AI</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%238C1D2B'/><path d='M4 17h7l3-8 4 14 3-6h7' fill='none' stroke='white' stroke-width='2.6' stroke-linejoin='round' stroke-linecap='round'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="app-page is-loading">
+
+<div class="loading-screen" aria-live="polite">
+  <svg class="pulse pulse-small" viewBox="0 0 300 100" aria-hidden="true">
+    <path class="pulse-line" pathLength="1"
+      d="M0 65 H110 L122 65 L134 30 L150 92 L166 10 L180 75 L190 65 H300" />
+  </svg>
+  <p>Loading your competitions…</p>
+</div>
+
+<header class="topbar">
+  <p class="wordmark">CampusPulse AI</p>
+  <nav class="mainnav" aria-label="Main">
+    <a href="app.html">Home</a>
+    <a href="deadlines.html">Deadlines</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="competitions.html" aria-current="page">Competitions</a>
+    <a href="reminders.html">Reminders</a>
+  </nav>
+  <div class="user-chip">
+    <span class="avatar" id="userAvatar" aria-hidden="true"></span>
+    <span class="user-name" id="userName"></span>
+    <button type="button" class="btn-quiet" id="signOutBtn">Sign out</button>
+  </div>
+</header>
+
+<main class="home competitions">
+  <div class="page-head">
+    <h1 class="page-title">Case competitions</h1>
+    <button type="button" class="btn-primary" id="addBtn">Add competition</button>
+  </div>
+  <p class="home-lead" id="summary"></p>
+
+  <p class="notice" id="loadError" role="alert" hidden></p>
+
+  <div class="toolbar">
+    <div class="tabs" role="group" aria-label="Show">
+      <button type="button" class="tab" data-view="active">Active <span class="tab-count">0</span></button>
+      <button type="button" class="tab" data-view="finished">Finished <span class="tab-count">0</span></button>
+      <button type="button" class="tab" data-view="all">All <span class="tab-count">0</span></button>
+    </div>
+  </div>
+
+  <div class="comp-grid" id="compGrid"></div>
+
+  <div class="empty-state" id="emptyState" hidden>
+    <p id="emptyText"></p>
+    <button type="button" class="btn-primary" id="emptyAddBtn">Add competition</button>
+  </div>
+</main>
+
+<!-- Add / edit competition, with its key dates -->
+<dialog class="dl-dialog comp-dialog" id="compDialog" aria-labelledby="compDialogTitle">
+  <div class="comp-dialog-body">
+    <h2 id="compDialogTitle">Add competition</h2>
+
+    <form id="compForm" novalidate>
+      <label for="cName">Competition name</label>
+      <input id="cName" name="cName" type="text" maxlength="150" required placeholder="BCG Strategy Challenge 2026" />
+
+      <div class="form-row">
+        <div>
+          <label for="cOrganizer">Organiser <span class="optional">(optional)</span></label>
+          <input id="cOrganizer" name="cOrganizer" type="text" maxlength="150" placeholder="BCG" />
+        </div>
+        <div>
+          <label for="cLink">Link <span class="optional">(optional)</span></label>
+          <input id="cLink" name="cLink" type="url" placeholder="https://unstop.com/…" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label for="cStage">Stage reached</label>
+          <select id="cStage" name="cStage"></select>
+        </div>
+        <div>
+          <label for="cOutcome">Status</label>
+          <select id="cOutcome" name="cOutcome">
+            <option value="">Still running</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="resultField" hidden>
+        <label for="cResult">Result details <span class="optional">(optional)</span></label>
+        <input id="cResult" name="cResult" type="text" maxlength="200" placeholder="National runner-up, ₹50,000" />
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label for="cTeam">Team name <span class="optional">(optional)</span></label>
+          <input id="cTeam" name="cTeam" type="text" maxlength="100" placeholder="Team Nexus" />
+        </div>
+        <div>
+          <label for="cMembers">Team members <span class="optional">(optional)</span></label>
+          <input id="cMembers" name="cMembers" type="text" maxlength="500" placeholder="Kumar, Priya, Arjun" />
+        </div>
+      </div>
+
+      <label for="cNotes">Notes <span class="optional">(optional)</span></label>
+      <textarea id="cNotes" name="cNotes" rows="2" maxlength="2000" placeholder="Theme: market entry for an EV start-up"></textarea>
+
+      <p class="form-error" id="compError" role="alert" hidden></p>
+    </form>
+
+    <section class="dates-section" id="datesSection" aria-labelledby="datesHeading" hidden>
+      <h3 id="datesHeading">Key dates</h3>
+      <p class="dates-help">These also appear on your Deadlines page, on Home and in reminder emails.</p>
+      <ul class="dates-list" id="datesList"></ul>
+
+      <div class="date-add" id="dateAdd">
+        <div class="date-add-title">
+          <label for="dTitle">What happens</label>
+          <input id="dTitle" type="text" maxlength="200" list="dateSuggestions" placeholder="Round 1 submission" />
+          <datalist id="dateSuggestions"></datalist>
+        </div>
+        <div>
+          <label for="dDate">Date</label>
+          <input id="dDate" type="date" />
+        </div>
+        <div>
+          <label for="dTime">Time</label>
+          <input id="dTime" type="time" value="23:59" />
+        </div>
+        <div class="date-add-actions">
+          <button type="button" class="btn-quiet" id="dCancel" hidden>Cancel</button>
+          <button type="button" class="btn-quiet date-add-btn" id="dSave">Add date</button>
+        </div>
+      </div>
+      <p class="form-error" id="dateError" role="alert" hidden></p>
+    </section>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn-danger" id="deleteBtn" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn-quiet" id="closeBtn">Cancel</button>
+      <button type="submit" form="compForm" class="btn-primary" id="saveBtn">Add competition</button>
+    </div>
+  </div>
+</dialog>
+
+<p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
+
+<script type="module" src="js/competitions-page.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # CampusPulse AI
 
-Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker. Part 3: Attendance. Part 4: Daily reminders.
+Part 1: Sign-in with Google (OAuth 2.0). Part 2: Assignment & Deadline tracker. Part 3: Attendance. Part 4: Daily reminders. Part 5: Case competition tracker.
 
 Static site (HTML/CSS/vanilla JS, no build step) hosted on GitHub Pages, with
 Supabase Auth handling Google sign-in.
@@ -33,6 +33,7 @@ app.html              home: greeting, Coming up, account (protected)
 deadlines.html        deadline tracker (protected)
 attendance.html       attendance module (protected)
 reminders.html        daily reminder settings + test email (protected)
+competitions.html     case competition tracker (protected)
 css/styles.css
 js/config.js          Supabase URL, publishable key, allowed domains
 js/supabaseClient.js  Supabase client (PKCE flow)
@@ -48,10 +49,14 @@ js/attendance-calc.js attendance %, can-miss / must-attend maths
 js/attendance-page.js attendance page logic
 js/reminders-data.js  reminder_settings + test-email call
 js/reminders-page.js  reminders page logic
+js/competitions-data.js  case_competitions + linked key dates
+js/competition-stages.js stage/outcome names, date suggestions
+js/competitions-page.js  competitions page logic
 supabase/01_auth.sql       Part 1: profiles, domain rule, security
 supabase/02_deadlines.sql  Part 2: deadlines table and security
 supabase/03_attendance.sql Part 3: attendance tables and security
 supabase/04_reminders.sql  Part 4: reminder settings, Vault secrets, hourly schedule
+supabase/05_competitions.sql Part 5: case_competitions, deadlines.competition_id
 supabase/functions/daily-reminders/index.ts  Edge Function that builds and sends the emails
 ```
 
@@ -112,3 +117,14 @@ matched by name; existing marks for the same subject and day are kept.
 - Resend without a verified domain only delivers to the address the Resend
   account was created with. To email other students, verify a domain in
   Resend and set `REMINDER_FROM` to an address on it.
+
+## Part 5: Case competition tracker
+
+Run `supabase/05_competitions.sql` once. Each competition has a stage
+(interested, registered, submitted, shortlisted, finalist), an outcome once
+it ends (won, not selected, withdrawn) with optional result text, team,
+link and notes. Key dates are rows in `deadlines` with `competition_id` set
+and category `case_competition`, so they show on the Deadlines page, Home and
+in reminder emails with no extra work. Renaming a competition updates the
+name shown on its dates; deleting it deletes them. The deadlines policy now
+also checks that a linked competition belongs to the same student.

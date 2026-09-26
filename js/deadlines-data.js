@@ -3,7 +3,7 @@
 
 import { supabase } from './supabaseClient.js';
 
-const COLUMNS = 'id,title,category,course,due_at,link,notes,status,completed_at,source,created_at';
+const COLUMNS = 'id,title,category,course,due_at,link,notes,status,completed_at,source,created_at,competition_id';
 
 const fromRow = (r) => ({
   id: r.id,
@@ -17,6 +17,7 @@ const fromRow = (r) => ({
   completedAt: r.completed_at,
   source: r.source,
   createdAt: r.created_at,
+  competitionId: r.competition_id,
 });
 
 const toRow = (d) => ({
@@ -26,6 +27,8 @@ const toRow = (d) => ({
   due_at: d.dueAt,
   link: d.link || '',
   notes: d.notes || '',
+  // Only sent when given, so editing from the Deadlines page keeps the link.
+  ...(d.competitionId !== undefined ? { competition_id: d.competitionId } : {}),
 });
 
 function check({ data, error }) {

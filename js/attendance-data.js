@@ -18,12 +18,17 @@ function check({ data, error }) {
 const subjectFromRow = (r) => ({
   id: r.id, name: r.name, code: r.code, description: r.description, createdAt: r.created_at,
 });
+// Postgres returns times as 'HH:MM:SS'; the page works with 'HH:MM' or ''.
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
+const timeOrNull = (t) => (t ? t : null);
+
 const recordFromRow = (r) => ({
   id: r.id, subjectId: r.subject_id, date: r.date, status: r.status, remarks: r.remarks,
+  classNo: r.class_no ?? 1, startTime: hhmm(r.start_time), endTime: hhmm(r.end_time),
 });
 
 const SUBJECT_COLS = 'id,name,code,description,created_at';
-const RECORD_COLS = 'id,subject_id,date,status,remarks';
+const RECORD_COLS = 'id,subject_id,date,status,remarks,class_no,start_time,end_time';
 
 // ---------- loading ----------
 
@@ -32,7 +37,7 @@ async function fetchAllRecords() {
   const PAGE = 1000; // Supabase returns at most 1000 rows per request
   for (let from = 0; ; from += PAGE) {
     const data = check(await supabase.from('att_records').select(RECORD_COLS)
-      .order('date').order('id').range(from, from + PAGE - 1));
+      .order('date').order('class_no').order('id').range(from, from + PAGE - 1));
     rows.push(...data);
     if (data.length < PAGE) return rows;
   }
@@ -75,20 +80,31 @@ export async function deleteSubject(id) {
 
 // ---------- records ----------
 
-// Sets the status for one subject on one date (creates or replaces).
-export async function setMark(subjectId, date, status) {
+// Sets the status for one class of a subject on one date (creates or replaces).
+// classNo numbers the classes within the day: 1, 2, 3...
+export async function setMark(subjectId, date, classNo, status, { startTime = '', endTime = '' } = {}) {
   return recordFromRow(check(await supabase.from('att_records')
-    .upsert({ subject_id: subjectId, date, status }, { onConflict: 'user_id,subject_id,date' })
+    .upsert({
+      subject_id: subjectId, date, class_no: classNo, status,
+      start_time: timeOrNull(startTime), end_time: timeOrNull(endTime),
+    }, { onConflict: 'user_id,subject_id,date,class_no' })
     .select(RECORD_COLS).single()));
 }
 
-export async function clearMark(subjectId, date) {
-  check(await supabase.from('att_records').delete().eq('subject_id', subjectId).eq('date', date));
+export async function clearMark(subjectId, date, classNo) {
+  check(await supabase.from('att_records').delete()
+    .eq('subject_id', subjectId).eq('date', date).eq('class_no', classNo));
 }
 
-export async function updateRecord(id, { status, remarks }) {
+// patch may hold any of: status, remarks, startTime, endTime.
+export async function updateRecord(id, patch) {
+  const row = {};
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.remarks !== undefined) row.remarks = (patch.remarks || '').trim();
+  if (patch.startTime !== undefined) row.start_time = timeOrNull(patch.startTime);
+  if (patch.endTime !== undefined) row.end_time = timeOrNull(patch.endTime);
   return recordFromRow(check(await supabase.from('att_records')
-    .update({ status, remarks: (remarks || '').trim() }).eq('id', id).select(RECORD_COLS).single()));
+    .update(row).eq('id', id).select(RECORD_COLS).single()));
 }
 
 export async function deleteRecord(id) {
@@ -141,19 +157,28 @@ export async function importBackup(data, existingSubjects) {
     subjectsAdded += 1;
   }
 
+  // The old app had one mark per day; if a file has more, number them 1, 2, 3...
+  const perDay = new Map();
   const rows = data.attendance
     .filter((a) => idMap.has(a.subjectId))
-    .map((a) => ({
-      subject_id: idMap.get(a.subjectId),
-      date: a.date,
-      status: String(a.status).toLowerCase(),
-      remarks: (a.remarks || '').slice(0, 300),
-    }));
+    .map((a) => {
+      const key = `${idMap.get(a.subjectId)}|${a.date}`;
+      const classNo = (perDay.get(key) || 0) + 1;
+      perDay.set(key, classNo);
+      return {
+        subject_id: idMap.get(a.subjectId),
+        date: a.date,
+        class_no: classNo,
+        status: String(a.status).toLowerCase(),
+        remarks: (a.remarks || '').slice(0, 300),
+      };
+    })
+    .filter((r) => r.class_no <= 9);
 
   let recordsAdded = 0;
   for (let i = 0; i < rows.length; i += 500) {
     const inserted = check(await supabase.from('att_records')
-      .upsert(rows.slice(i, i + 500), { onConflict: 'user_id,subject_id,date', ignoreDuplicates: true })
+      .upsert(rows.slice(i, i + 500), { onConflict: 'user_id,subject_id,date,class_no', ignoreDuplicates: true })
       .select('id'));
     recordsAdded += inserted.length;
   }

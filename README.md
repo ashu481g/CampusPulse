@@ -63,6 +63,7 @@ supabase/03_attendance.sql Part 3: attendance tables and security
 supabase/04_reminders.sql  Part 4: reminder settings, Vault secrets, hourly schedule
 supabase/05_competitions.sql Part 5: case_competitions, deadlines.competition_id
 supabase/06_email_import.sql Part 6: email_suggestions, email_processed
+supabase/07_attendance_classes.sql Part 3b: several classes per day, class timings
 supabase/functions/extract-deadlines/index.ts  Edge Function: emails -> Claude -> suggestions
 supabase/functions/daily-reminders/index.ts  Edge Function that builds and sends the emails
 ```
@@ -103,6 +104,16 @@ day, present/absent, remarks) and `att_settings` (target %, default 75).
 With attended `a`, total `t` and target `p`:
 - classes you can still miss: `floor(a/p - t)`
 - classes to attend in a row when below target: `ceil((p*t - a) / (1 - p))`
+
+Several classes of one subject on the same day: run
+`supabase/07_attendance_classes.sql` once (after 03). Each record then has a
+`class_no` (1-9 within the day) and optional `start_time` / `end_time`
+(India time; the end must be after the start). The one-mark-per-day rule
+becomes one mark per class: `unique (user_id, subject_id, date, class_no)`.
+Existing marks become class 1 with no time. On the Attendance page, each
+subject shows its classes for the chosen day, each with a time and
+Present/Absent; "+ Another class today" adds one. Every class counts
+separately towards the percentage. Times can also be edited in History.
 
 Old data from the Attendance Register app: export a backup there and use
 "import the backup file" at the bottom of the Attendance page. Subjects are

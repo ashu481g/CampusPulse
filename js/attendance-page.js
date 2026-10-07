@@ -16,7 +16,12 @@ const state = {
   date: todayIso(),
   editingSubjectId: null,
   historySubjectId: null,
+  // Classes added on screen but not marked yet, keyed "subjectId|date":
+  // [{ classNo, startTime, endTime }]. Kept in memory only.
+  drafts: new Map(),
 };
+
+const MAX_CLASSES = 9; // per subject per day, same limit as the database
 
 // ---------- small helpers ----------
 
@@ -38,8 +43,76 @@ function el(tag, className, text) {
 }
 
 const recordsFor = (subjectId) => state.records.filter((r) => r.subjectId === subjectId);
-const recordOn = (subjectId, date) => state.records.find((r) => r.subjectId === subjectId && r.date === date);
+const recordsOn = (subjectId, date) => state.records.filter((r) => r.subjectId === subjectId && r.date === date);
 const subjectLabel = (s) => (s.code ? `${s.name} (${s.code})` : s.name);
+
+// '14:30' -> '2:30 pm'
+function prettyTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+}
+function timeRange(start, end) {
+  if (start && end) return `${prettyTime(start)} to ${prettyTime(end)}`;
+  if (start) return `from ${prettyTime(start)}`;
+  if (end) return `until ${prettyTime(end)}`;
+  return '';
+}
+const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const fromMin = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+
+// When the start time moves past the end time, move the end too, keeping
+// the class length (1 hour if unknown). Returns the end time to use.
+function followEnd(oldStart, oldEnd, newStart) {
+  if (!newStart || !oldEnd || oldEnd > newStart) return oldEnd;
+  const length = oldStart && oldEnd > oldStart ? toMin(oldEnd) - toMin(oldStart) : 60;
+  return fromMin(Math.min(toMin(newStart) + length, 23 * 60 + 59));
+}
+
+// Wires a start/end pair: moving the start drags the end along; then save(start, end).
+function wireTimes(start, end, save) {
+  let lastStart = start.value;
+  start.addEventListener('change', () => {
+    end.value = followEnd(lastStart, end.value, start.value);
+    lastStart = start.value;
+    save(start.value, end.value);
+  });
+  end.addEventListener('change', () => save(start.value, end.value));
+}
+
+// Error text if the times don't make sense, else ''.
+function timesError(start, end) {
+  return start && end && end <= start ? 'The class must end after it starts.' : '';
+}
+
+// ---------- class slots (one per class of a subject on a day) ----------
+
+const draftKey = (subjectId, date) => `${subjectId}|${date}`;
+const draftsOn = (subjectId, date) => state.drafts.get(draftKey(subjectId, date)) || [];
+
+function setDraft(subjectId, date, classNo, values) {
+  const key = draftKey(subjectId, date);
+  const list = draftsOn(subjectId, date).filter((d) => d.classNo !== classNo);
+  list.push({ classNo, startTime: '', endTime: '', ...values });
+  state.drafts.set(key, list);
+}
+function dropDraft(subjectId, date, classNo) {
+  const key = draftKey(subjectId, date);
+  const list = draftsOn(subjectId, date).filter((d) => d.classNo !== classNo);
+  if (list.length) state.drafts.set(key, list); else state.drafts.delete(key);
+}
+
+// Marked classes plus unmarked ones added on screen, in class order.
+// There is always at least one slot, so a subject can be marked straight away.
+function slotsFor(subjectId, date) {
+  const recs = recordsOn(subjectId, date);
+  const slots = recs.map((r) => ({ classNo: r.classNo, rec: r, startTime: r.startTime, endTime: r.endTime }));
+  for (const d of draftsOn(subjectId, date)) {
+    if (!recs.some((r) => r.classNo === d.classNo)) slots.push({ ...d, rec: null });
+  }
+  if (!slots.length) slots.push({ classNo: 1, rec: null, startTime: '', endTime: '' });
+  return slots.sort((a, b) => a.classNo - b.classNo);
+}
 
 // 'safe' | 'edge' | 'below' | 'none' — drives the colour of meters and text.
 function tone(stats) {
@@ -91,10 +164,13 @@ function renderMarking() {
   $('markEmpty').hidden = state.subjects.length > 0;
 
   for (const s of state.subjects) {
-    const rec = recordOn(s.id, state.date);
     const stats = statsFor(recordsFor(s.id));
+    const slots = slotsFor(s.id, state.date);
+    const marked = slots.filter((x) => x.rec);
     const li = el('li', 'mark-row');
-    li.dataset.status = rec?.status || 'none';
+    // Row colour: present/absent when every class shown is marked the same way.
+    const kinds = new Set(marked.map((x) => x.rec.status));
+    li.dataset.status = marked.length === slots.length && kinds.size === 1 ? [...kinds][0] : 'none';
 
     const info = el('div', 'mark-info');
     const nameLine = el('p', 'mark-name');
@@ -109,19 +185,66 @@ function renderMarking() {
       ? `${formatPercent(stats.percentage)}, ${marginText(stats, state.target).toLowerCase()}`
       : 'No classes marked yet'));
 
-    const group = el('div', 'seg');
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', `${s.name} on ${prettyDate(state.date)}`);
-    for (const [value, cfg] of Object.entries(STATUSES)) {
-      const b = el('button', `seg-btn seg-${value}`, cfg.label);
-      b.type = 'button';
-      b.setAttribute('aria-pressed', rec?.status === value);
-      b.addEventListener('click', () => mark(s, value));
-      group.appendChild(b);
+    const classes = el('div', 'mark-classes');
+    for (const slot of slots) classes.appendChild(slotRow(s, slot, slots.length));
+
+    if (slots.length < MAX_CLASSES) {
+      const add = el('button', 'link-btn add-class', slots.length === 1 ? '+ Another class today' : '+ Another class');
+      add.type = 'button';
+      add.setAttribute('aria-label', `Add another ${s.name} class on ${prettyDate(state.date)}`);
+      add.addEventListener('click', () => addClass(s));
+      classes.appendChild(add);
     }
-    li.append(info, group);
+
+    li.append(info, classes);
     list.appendChild(li);
   }
+}
+
+// One class: optional label, start/end time, Present/Absent, and remove.
+function slotRow(s, slot, slotCount) {
+  const row = el('div', 'class-slot');
+  row.dataset.status = slot.rec?.status || 'none';
+  const name = slotCount > 1 ? `${s.name}, class ${slot.classNo}` : s.name;
+
+  if (slotCount > 1) row.appendChild(el('span', 'class-no', `Class ${slot.classNo}`));
+
+  const times = el('div', 'class-times');
+  const start = el('input', 'time-input');
+  start.type = 'time';
+  start.value = slot.startTime;
+  start.setAttribute('aria-label', `${name} start time`);
+  const end = el('input', 'time-input');
+  end.type = 'time';
+  end.value = slot.endTime;
+  end.setAttribute('aria-label', `${name} end time`);
+  wireTimes(start, end, (a, b) => saveSlotTimes(s, slot, a, b));
+  times.append(start, el('span', 'time-sep', 'to'), end);
+
+  const group = el('div', 'seg');
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', `${name} on ${prettyDate(state.date)}`);
+  for (const [value, cfg] of Object.entries(STATUSES)) {
+    const b = el('button', `seg-btn seg-${value}`, cfg.label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', slot.rec?.status === value);
+    b.addEventListener('click', () => mark(s, slot, value, { startTime: start.value, endTime: end.value }));
+    group.appendChild(b);
+  }
+
+  row.append(times, group);
+
+  if (slotCount > 1) {
+    const rm = el('button', 'btn-quiet icon-btn class-remove', '×');
+    rm.type = 'button';
+    rm.title = 'Remove this class';
+    rm.setAttribute('aria-label', `Remove ${name}`);
+    rm.addEventListener('click', () => removeClass(s, slot));
+    row.appendChild(rm);
+  } else {
+    row.appendChild(el('span', 'class-remove-space'));
+  }
+  return row;
 }
 
 function renderSubjects() {
@@ -177,25 +300,79 @@ function render() {
 
 // ---------- marking ----------
 
-async function mark(subject, status) {
+async function mark(subject, slot, status, times) {
   const date = state.date;
-  const existing = recordOn(subject.id, date);
+  const err = timesError(times.startTime, times.endTime);
+  if (err) { toast(err, true); return; }
+  const many = slotsFor(subject.id, date).length > 1;
+  const name = many ? `${subject.name}, class ${slot.classNo}` : subject.name;
   try {
-    if (existing?.status === status) {
-      // Pressing the selected button again clears the mark.
-      await data.clearMark(subject.id, date);
-      state.records = state.records.filter((r) => r !== existing);
-      toast(`Cleared ${subject.name} for ${prettyDate(date, { day: 'numeric', month: 'short' })}.`);
+    if (slot.rec?.status === status) {
+      // Pressing the selected button again clears the mark (the class stays on screen).
+      await data.clearMark(subject.id, date, slot.classNo);
+      state.records = state.records.filter((r) => r !== slot.rec);
+      setDraft(subject.id, date, slot.classNo, times);
+      toast(`Cleared ${name} for ${prettyDate(date, { day: 'numeric', month: 'short' })}.`);
     } else {
-      const saved = await data.setMark(subject.id, date, status);
-      state.records = state.records.filter((r) => !(r.subjectId === subject.id && r.date === date));
+      const saved = await data.setMark(subject.id, date, slot.classNo, status, times);
+      state.records = state.records.filter((r) =>
+        !(r.subjectId === subject.id && r.date === date && r.classNo === slot.classNo));
       state.records.push(saved);
-      toast(`${subject.name}: ${STATUSES[status].label}.`);
+      dropDraft(subject.id, date, slot.classNo);
+      toast(`${name}: ${STATUSES[status].label}.`);
     }
     render();
-  } catch (err) {
-    toast(`Could not save: ${err.message}`, true);
+  } catch (e) {
+    toast(`Could not save: ${e.message}`, true);
   }
+}
+
+async function saveSlotTimes(subject, slot, startTime, endTime) {
+  const err = timesError(startTime, endTime);
+  if (err) { toast(err, true); renderMarking(); return; }
+  if (!slot.rec) {
+    // Not marked yet: remember the times until Present/Absent is pressed.
+    setDraft(subject.id, state.date, slot.classNo, { startTime, endTime });
+    return;
+  }
+  try {
+    const updated = await data.updateRecord(slot.rec.id, { startTime, endTime });
+    state.records = state.records.map((r) => (r.id === updated.id ? updated : r));
+    render();
+    toast(startTime || endTime ? `Time saved: ${timeRange(startTime, endTime)}.` : 'Time cleared.');
+  } catch (e) {
+    toast(`Could not save the time: ${e.message}`, true);
+    renderMarking();
+  }
+}
+
+function addClass(subject) {
+  const slots = slotsFor(subject.id, state.date);
+  // Keep the class shown by default as a draft too, so it doesn't vanish.
+  for (const sl of slots) {
+    if (!sl.rec) setDraft(subject.id, state.date, sl.classNo, { startTime: sl.startTime, endTime: sl.endTime });
+  }
+  const next = Math.max(...slots.map((x) => x.classNo)) + 1;
+  if (next > MAX_CLASSES) { toast(`At most ${MAX_CLASSES} classes of a subject per day.`, true); return; }
+  setDraft(subject.id, state.date, next, {});
+  renderMarking();
+}
+
+async function removeClass(subject, slot) {
+  if (slot.rec) {
+    const label = `${subject.name}, class ${slot.classNo}, on ${prettyDate(state.date, { day: 'numeric', month: 'short' })}`;
+    if (!window.confirm(`Remove ${label}? Its ${STATUSES[slot.rec.status].label.toLowerCase()} mark will be deleted.`)) return;
+    try {
+      await data.clearMark(subject.id, state.date, slot.classNo);
+      state.records = state.records.filter((r) => r !== slot.rec);
+    } catch (e) {
+      toast(`Could not remove: ${e.message}`, true);
+      return;
+    }
+  }
+  dropDraft(subject.id, state.date, slot.classNo);
+  render();
+  toast(`Removed class ${slot.classNo} of ${subject.name}.`);
 }
 
 function setDate(iso) {
@@ -313,7 +490,9 @@ function openHistory(subjectId) {
 function renderHistory() {
   const s = state.subjects.find((x) => x.id === state.historySubjectId);
   if (!s) { $('historyDialog').close(); return; }
-  const recs = recordsFor(s.id).sort((a, b) => b.date.localeCompare(a.date));
+  const recs = recordsFor(s.id).sort((a, b) => b.date.localeCompare(a.date) || a.classNo - b.classNo);
+  const perDay = new Map();
+  for (const r of recs) perDay.set(r.date, (perDay.get(r.date) || 0) + 1);
   const stats = statsFor(recs);
 
   $('historyTitle').textContent = subjectLabel(s);
@@ -328,7 +507,25 @@ function renderHistory() {
     const li = el('li', 'history-row');
     li.dataset.status = r.status;
 
-    li.append(el('span', 'history-date', prettyDate(r.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })));
+    const when = el('span', 'history-date', prettyDate(r.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }));
+    if (perDay.get(r.date) > 1) when.append(el('span', 'history-class', `Class ${r.classNo}`));
+    li.append(when);
+
+    const times = el('div', 'class-times history-times');
+    const start = el('input', 'time-input');
+    start.type = 'time';
+    start.value = r.startTime;
+    start.setAttribute('aria-label', `Start time on ${r.date}`);
+    const end = el('input', 'time-input');
+    end.type = 'time';
+    end.value = r.endTime;
+    end.setAttribute('aria-label', `End time on ${r.date}`);
+    wireTimes(start, end, (a, b) => {
+      const err = timesError(a, b);
+      if (err) { toast(err, true); renderHistory(); return; }
+      saveRecord(r, { startTime: a, endTime: b });
+    });
+    times.append(start, el('span', 'time-sep', 'to'), end);
 
     const select = el('select', 'history-status');
     select.setAttribute('aria-label', `Status on ${r.date}`);
@@ -348,14 +545,14 @@ function renderHistory() {
     del.setAttribute('aria-label', `Delete record for ${r.date}`);
     del.addEventListener('click', () => removeRecord(r));
 
-    li.append(select, remarks, del);
+    li.append(times, select, remarks, del);
     list.appendChild(li);
   }
 }
 
 async function saveRecord(r, patch) {
   try {
-    const updated = await data.updateRecord(r.id, { status: patch.status ?? r.status, remarks: patch.remarks ?? r.remarks });
+    const updated = await data.updateRecord(r.id, patch);
     state.records = state.records.map((x) => (x.id === r.id ? updated : x));
     render();
     toast('Saved.');
@@ -366,7 +563,8 @@ async function saveRecord(r, patch) {
 }
 
 async function removeRecord(r) {
-  if (!window.confirm(`Delete the record for ${prettyDate(r.date)}?`)) return;
+  const which = recordsOn(r.subjectId, r.date).length > 1 ? ` (class ${r.classNo})` : '';
+  if (!window.confirm(`Delete the record for ${prettyDate(r.date)}${which}?`)) return;
   try {
     await data.deleteRecord(r.id);
     state.records = state.records.filter((x) => x.id !== r.id);

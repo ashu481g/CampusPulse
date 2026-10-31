@@ -11,4 +11,5 @@
 export const SUPABASE_URL = 'https://yoyjdwvmpuyllzfsfisl.supabase.co';
 export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_B8lQfa2FZr9vdgeDQMxlHQ_SZjVP-Vd';
 
-export const ALLOWED_DOMAINS = ['iiml.ac.in'];
+//export const ALLOWED_DOMAINS = ['iiml.ac.in'];
+export const ALLOWED_DOMAINS = ['iiml.ac.in', 'gmail.com'];

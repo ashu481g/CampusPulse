@@ -64,7 +64,7 @@ supabase/04_reminders.sql  Part 4: reminder settings, Vault secrets, hourly sche
 supabase/05_competitions.sql Part 5: case_competitions, deadlines.competition_id
 supabase/06_email_import.sql Part 6: email_suggestions, email_processed
 supabase/07_attendance_classes.sql Part 3b: several classes per day, class timings
-supabase/functions/extract-deadlines/index.ts  Edge Function: emails -> Claude -> suggestions
+supabase/functions/extract-deadlines/index.ts  Edge Function: emails -> OpenRouter -> suggestions
 supabase/functions/daily-reminders/index.ts  Edge Function that builds and sends the emails
 ```
 
@@ -153,14 +153,14 @@ also checks that a linked competition belongs to the same student.
   (Google Identity Services, scope `gmail.readonly`). The token lives only in
   memory for about an hour; nothing about it is stored on the server.
 - The browser sends up to 5 emails at a time to the `extract-deadlines` Edge
-  Function, which asks an AI model (Gemini if `GEMINI_API_KEY` is set, otherwise Claude) for dated,
+  Function, which asks an AI model (through OpenRouter) for dated,
   actionable items, validates them (IST, skips past dates) and stores them
   in `email_suggestions`. Analysed Gmail ids go into `email_processed` so a
   re-scan skips them.
 - Nothing becomes a deadline until the student presses "Add to deadlines";
   those deadlines get `source = 'email'`. Pasting an email works without
   Gmail access.
-- Function secrets: `GEMINI_API_KEY` (free tier; default model `gemini-flash-lite-latest`, override with `GEMINI_MODEL`) or `ANTHROPIC_API_KEY` (default `claude-haiku-4-5-20251001`, override with `EXTRACT_MODEL`). Gemini calls are spaced ~4.5 s apart to respect free-tier per-minute limits.
+- Function secrets: `OPENROUTER_API_KEY` (from openrouter.ai -> Keys). Default model `google/gemini-2.5-flash-lite`; override with `OPENROUTER_MODEL` (any OpenRouter model id, e.g. one ending in `:free` to run without credit). Calls are spaced ~3.5 s apart to respect free-model per-minute limits.
   Deploy with JWT verification off.
 - `gmail.readonly` is a restricted Google scope. In Testing mode only listed
   test users can grant it (with an "unverified app" warning); opening it to

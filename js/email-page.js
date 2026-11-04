@@ -9,7 +9,7 @@ import { CATEGORIES, toDateInput, toTimeInput, fromInputs, formatDate } from './
 
 const $ = (id) => document.getElementById(id);
 const BATCH = 3;          // emails per call to the extract function (keeps free AI tiers happy)
-const MAX_SCAN = 40;      // emails looked at per scan
+const CONFIRM_OVER = 100; // ask before checking more new emails than this in one scan
 
 const state = { suggestions: [], deadlines: [], email: '' };
 
@@ -238,7 +238,12 @@ async function scanGmail() {
     $('disconnectBtn').hidden = false;
 
     progress('scanProgress', 'Searching your inbox…');
-    const ids = await listMessageIds(token, buildQuery(Number($('scanDays').value), $('onlyLikely').checked), MAX_SCAN);
+    const query = buildQuery(Number($('scanDays').value), $('onlyLikely').checked);
+    const ids = await listMessageIds(token, query, (n) => progress('scanProgress', `Searching your inbox… ${n} matching emails so far`));
+
+    // Emails checked in an earlier scan are skipped, so a limited scan moves
+    // on to the next unchecked ones each time.
+    progress('scanProgress', `Found ${ids.length} matching emails. Skipping ones checked before…`);
     const seen = await data.alreadyProcessed(ids);
     const fresh = ids.filter((id) => !seen.has(id));
     if (!fresh.length) {
@@ -248,10 +253,20 @@ async function scanGmail() {
       return;
     }
 
+    const limit = Number($('scanLimit').value);
+    const todo = limit ? fresh.slice(0, limit) : fresh;
+    if (todo.length > CONFIRM_OVER) {
+      const minutes = Math.max(1, Math.round((todo.length * 4) / 60));
+      if (!window.confirm(`There are ${todo.length} new emails to check, which takes about ${minutes} minutes. Keep this page open while it runs. Continue?`)) {
+        progress('scanProgress', 'Scan cancelled. Choose a shorter period or a limit under "How many emails to check".', 'ok');
+        return;
+      }
+    }
+
     const emails = [];
-    for (let i = 0; i < fresh.length; i++) {
-      progress('scanProgress', `Reading email ${i + 1} of ${fresh.length}…`);
-      emails.push(await getMessage(token, fresh[i]));
+    for (let i = 0; i < todo.length; i++) {
+      progress('scanProgress', `Reading email ${i + 1} of ${todo.length}…`);
+      emails.push(await getMessage(token, todo[i]));
     }
 
     const { found, failed, lastError } = await extractAll(emails, 'scanProgress');
@@ -259,7 +274,8 @@ async function scanGmail() {
     refreshProcessedLine();
     let msg = `Checked ${emails.length} new email${emails.length === 1 ? '' : 's'} and found ${found} deadline${found === 1 ? '' : 's'} to review.`;
     if (failed) msg += ` ${failed} could not be checked (${lastError}). They will be tried again next scan.`;
-    if (ids.length >= MAX_SCAN) msg += ` Only the latest ${MAX_SCAN} matching emails are checked per scan; scan again for older ones.`;
+    const left = fresh.length - todo.length;
+    if (left) msg += ` ${left} more unchecked email${left === 1 ? ' is' : 's are'} left in this period; scan again to check ${left === 1 ? 'it' : 'them'}.`;
     progress('scanProgress', msg, failed ? 'error' : 'ok');
   } catch (err) {
     progress('scanProgress', err.message, 'error');

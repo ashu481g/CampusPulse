@@ -92,16 +92,18 @@ export function buildQuery(days, onlyLikely) {
   return q;
 }
 
-export async function listMessageIds(token, query, max = 40) {
+// Every matching message id, newest first, following Gmail's pages to the end.
+// onProgress(count) is called after each page.
+export async function listMessageIds(token, query, onProgress = () => {}) {
   const ids = [];
   let pageToken = '';
-  while (ids.length < max) {
-    const d = await gmail(token, `messages?maxResults=${Math.min(100, max - ids.length)}&q=${encodeURIComponent(query)}${pageToken ? `&pageToken=${pageToken}` : ''}`);
+  do {
+    const d = await gmail(token, `messages?maxResults=500&q=${encodeURIComponent(query)}${pageToken ? `&pageToken=${pageToken}` : ''}`);
     for (const m of d.messages || []) ids.push(m.id);
-    if (!d.nextPageToken) break;
-    pageToken = d.nextPageToken;
-  }
-  return ids.slice(0, max);
+    onProgress(ids.length);
+    pageToken = d.nextPageToken || '';
+  } while (pageToken);
+  return ids;
 }
 
 function decode(data) {

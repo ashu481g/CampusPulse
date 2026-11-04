@@ -152,6 +152,10 @@ also checks that a linked competition belongs to the same student.
 - Gmail is read in the student's own browser with a read-only Google token
   (Google Identity Services, scope `gmail.readonly`). The token lives only in
   memory for about an hour; nothing about it is stored on the server.
+- A scan lists every matching email in the chosen period (3–30 days), skips
+  ones checked before, and checks all the rest, or only the newest 25/50/100
+  if the student picks a limit. It asks first if more than 100 are to be
+  checked. With a limit, the next scan carries on with the remaining ones.
 - The browser sends up to 5 emails at a time to the `extract-deadlines` Edge
   Function, which asks an AI model (through OpenRouter) for dated,
   actionable items, validates them (IST, skips past dates) and stores them

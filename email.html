@@ -61,6 +61,15 @@
             <option value="30">The last 30 days</option>
           </select>
         </div>
+        <div>
+          <label for="scanLimit">How many emails to check</label>
+          <select id="scanLimit">
+            <option value="0" selected>All new emails in that period</option>
+            <option value="25">Up to 25 new emails</option>
+            <option value="50">Up to 50 new emails</option>
+            <option value="100">Up to 100 new emails</option>
+          </select>
+        </div>
       </div>
       <label class="check-row">
         <input type="checkbox" id="onlyLikely" checked />

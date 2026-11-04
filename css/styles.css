@@ -854,12 +854,13 @@ tr[data-tone="edge"] .att-margin { color: var(--amber-ink); font-weight: 600; }
 .email-sources .panel { display: flex; flex-direction: column; gap: 0.35rem; }
 .email-sources h2 { margin-bottom: 0.4rem; }
 .email-sources label { font-size: 0.88rem; font-weight: 600; margin-top: 0.4rem; }
-.email-sources input[type="text"], .email-sources textarea, .email-sources select {
+.email-sources input[type="text"], .email-sources input[type="date"], .email-sources textarea, .email-sources select {
   font: 400 0.95rem var(--font); color: var(--ink); background: var(--surface); width: 100%;
   border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem;
 }
 .email-sources textarea { resize: vertical; }
 .scan-options { grid-template-columns: 1fr; }
+#scanRange { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
 #scanRange[hidden] { display: none; }
 .email-sources .form-actions { margin-top: 0.9rem; }
 .notice-soft { margin: 0 0 0.6rem; font-size: 0.9rem; }

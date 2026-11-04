@@ -82,10 +82,14 @@ async function gmail(token, path) {
   return res.json();
 }
 
-// Gmail search: recent mail, no promotions/social, optionally only mail
+// Gmail search: mail from the last N days, or from a { from, to } pair of
+// Dates (both days included), no promotions/social, optionally only mail
 // that mentions deadline-like words (saves time and AI cost).
-export function buildQuery(days, onlyLikely) {
-  let q = `newer_than:${days}d -in:chats -in:sent -category:promotions -category:social`;
+export function buildQuery(period, onlyLikely) {
+  const when = typeof period === 'number'
+    ? `newer_than:${period}d`
+    : `after:${Math.floor(period.from / 1000)} before:${Math.floor(period.to / 1000) + 86400}`;
+  let q = `${when} -in:chats -in:sent -category:promotions -category:social`;
   if (onlyLikely) {
     q += ' {deadline due submission submit "last date" register registration quiz exam assignment round deliverable apply application}';
   }

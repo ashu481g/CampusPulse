@@ -229,16 +229,39 @@ async function extractAll(emails, progressId) {
 
 // ---------- scan Gmail ----------
 
+// The chosen period: a number of days, or { from, to } local-midnight Dates.
+// Throws a readable error if the custom dates are missing or out of order.
+function scanPeriod() {
+  const choice = $('scanDays').value;
+  if (choice !== 'custom') return Number(choice);
+  const from = $('scanFrom').value;
+  const to = $('scanTo').value;
+  if (!from || !to) throw new Error('Choose both a From and a To date.');
+  if (from > to) throw new Error('The From date must be on or before the To date.');
+  return { from: new Date(`${from}T00:00`), to: new Date(`${to}T00:00`) };
+}
+
+function showRange() {
+  const custom = $('scanDays').value === 'custom';
+  $('scanRange').hidden = !custom;
+  if (custom && !$('scanTo').value) {
+    const today = new Date();
+    $('scanTo').value = toDateInput(today.toISOString());
+    $('scanFrom').value = toDateInput(new Date(today.getTime() - 7 * 86400e3).toISOString());
+  }
+}
+
 async function scanGmail() {
   const btn = $('scanBtn');
   btn.disabled = true;
   try {
+    const period = scanPeriod();
     progress('scanProgress', 'Asking Google for read-only access…');
     const token = await getGmailToken(state.email);
     $('disconnectBtn').hidden = false;
 
     progress('scanProgress', 'Searching your inbox…');
-    const query = buildQuery(Number($('scanDays').value), $('onlyLikely').checked);
+    const query = buildQuery(period, $('onlyLikely').checked);
     const ids = await listMessageIds(token, query, (n) => progress('scanProgress', `Searching your inbox… ${n} matching emails so far`));
 
     // Emails checked in an earlier scan are skipped, so a limited scan moves
@@ -320,6 +343,7 @@ async function init() {
   }
 
   $('scanBtn').addEventListener('click', scanGmail);
+  $('scanDays').addEventListener('change', showRange);
   $('disconnectBtn').addEventListener('click', () => {
     disconnectGmail();
     $('disconnectBtn').hidden = true;

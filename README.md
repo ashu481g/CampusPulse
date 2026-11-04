@@ -152,7 +152,8 @@ also checks that a linked competition belongs to the same student.
 - Gmail is read in the student's own browser with a read-only Google token
   (Google Identity Services, scope `gmail.readonly`). The token lives only in
   memory for about an hour; nothing about it is stored on the server.
-- A scan lists every matching email in the chosen period (3–30 days), skips
+- A scan lists every matching email in the chosen period (the last 3–30
+  days, or a From/To date range the student picks), skips
   ones checked before, and checks all the rest, or only the newest 25/50/100
   if the student picks a limit. It asks first if more than 100 are to be
   checked. With a limit, the next scan carries on with the remaining ones.

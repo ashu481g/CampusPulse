@@ -553,6 +553,31 @@ h1, h2 {
 .btn-quiet:disabled:hover { border-color: var(--line); color: var(--ink); }
 .mark-date-label { margin: 0.2rem 0 0.8rem; font-weight: 600; color: var(--maroon-deep); }
 
+/* Classes from Google Calendar */
+.cal-bar {
+  margin: 0 0 1rem; padding: 0.8rem 0.9rem;
+  background: var(--ground); border-radius: var(--radius-sm);
+}
+.cal-bar[hidden] { display: none; }
+.cal-prompt { margin: 0 0 0.6rem; font-size: 0.93rem; }
+.cal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.cal-actions select, .cal-match-row select {
+  font: 400 0.93rem var(--font); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; max-width: 100%;
+}
+.cal-actions select[hidden] { display: none; }
+.cal-bar .scan-progress { background: var(--surface); }
+.cal-match[hidden] { display: none; }
+.cal-match-lead { margin: 0.9rem 0 0.4rem; font-size: 0.9rem; font-weight: 600; }
+.cal-match-list { list-style: none; margin: 0; padding: 0; }
+.cal-match-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem;
+  padding: 0.5rem 0; border-top: 1px solid var(--line);
+}
+.cal-match-info { display: flex; flex-direction: column; min-width: 0; }
+.cal-match-title { font-weight: 600; overflow-wrap: anywhere; }
+.cal-match-time { font-size: 0.85rem; color: var(--ink-soft); }
+
 .mark-list { list-style: none; margin: 0; padding: 0; }
 .mark-row {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;

@@ -6,6 +6,8 @@ import {
   STATUSES, statsFor, margin, marginText, formatPercent,
   todayIso, shiftIso, prettyDate,
 } from './attendance-calc.js';
+import { isGmailConfigured as isGoogleConfigured } from './google-config.js';
+import { getCalendarToken, hasCalendarToken, listCalendars, classesOn } from './calendar.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,7 +21,15 @@ const state = {
   // Classes added on screen but not marked yet, keyed "subjectId|date":
   // [{ classNo, startTime, endTime }]. Kept in memory only.
   drafts: new Map(),
+  email: '',
+  // Google Calendar: remembered event names (title key -> subject id or
+  // null), the student's calendars, and the day's events not matched yet.
+  titles: null,
+  calendars: [],
+  unmatched: [],
 };
+
+const CALENDAR_KEY = 'campuspulse.calendarId'; // last calendar read, this browser only
 
 const MAX_CLASSES = 9; // per subject per day, same limit as the database
 
@@ -163,7 +173,11 @@ function renderMarking() {
   list.textContent = '';
   $('markEmpty').hidden = state.subjects.length > 0;
 
-  for (const s of state.subjects) {
+  // Subjects with classes on this day (marked, fetched or added) come first.
+  const hasClasses = (s) => recordsOn(s.id, state.date).length > 0 || draftsOn(s.id, state.date).length > 0;
+  const ordered = [...state.subjects].sort((a, b) => Number(hasClasses(b)) - Number(hasClasses(a)));
+
+  for (const s of ordered) {
     const stats = statsFor(recordsFor(s.id));
     const slots = slotsFor(s.id, state.date);
     const marked = slots.filter((x) => x.rec);
@@ -378,7 +392,190 @@ async function removeClass(subject, slot) {
 function setDate(iso) {
   const today = todayIso();
   state.date = iso > today ? today : iso;
+  state.unmatched = [];
   renderMarking();
+  renderMatch();
+  calStatus('');
+  // Once calendar access is given, each day's classes load by themselves.
+  if (hasCalendarToken()) fetchClasses();
+}
+
+// ---------- classes from Google Calendar ----------
+
+function calStatus(text, kind = 'info') {
+  $('calStatus').textContent = text;
+  $('calStatus').dataset.kind = kind;
+  $('calStatus').hidden = !text;
+}
+
+const slugWords = (s) => ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+
+// The subject for a calendar event name: the student's earlier answer if
+// there is one, else the one subject whose name or code appears in it.
+// Returns a subject id, null for "not a class", or undefined if unknown.
+function subjectForTitle(title) {
+  const key = data.titleKey(title);
+  if (state.titles.has(key)) {
+    const id = state.titles.get(key);
+    return id === null || state.subjects.some((s) => s.id === id) ? id : undefined;
+  }
+  const words = slugWords(title);
+  const hits = state.subjects.filter((s) => [s.code, s.name]
+    .some((v) => v && slugWords(v).trim() && words.includes(slugWords(v))));
+  return hits.length === 1 ? hits[0].id : undefined;
+}
+
+// Puts one calendar class on screen for marking, with its times. Skips it
+// if a class starting at that time is already there; a class marked earlier
+// without times gets these times instead of a second class being added.
+// Returns true if something changed.
+async function addCalendarClass(subjectId, date, c) {
+  const recs = recordsOn(subjectId, date);
+  const drafts = draftsOn(subjectId, date);
+  if ([...recs, ...drafts].some((x) => x.startTime === c.startTime)) return false;
+
+  const timeless = recs.find((r) => !r.startTime && !r.endTime);
+  if (timeless) {
+    const updated = await data.updateRecord(timeless.id, { startTime: c.startTime, endTime: c.endTime });
+    state.records = state.records.map((r) => (r.id === updated.id ? updated : r));
+    return true;
+  }
+  const blank = drafts.find((d) => !d.startTime && !d.endTime);
+  const used = [...recs, ...drafts].map((x) => x.classNo);
+  const classNo = blank ? blank.classNo : (used.length ? Math.max(...used) + 1 : 1);
+  if (classNo > MAX_CLASSES) return false;
+  setDraft(subjectId, date, classNo, { startTime: c.startTime, endTime: c.endTime });
+  return true;
+}
+
+async function loadCalendars(token) {
+  state.calendars = await listCalendars(token);
+  const select = $('calSelect');
+  select.textContent = '';
+  for (const c of state.calendars) select.add(new Option(c.primary ? `${c.name} (your calendar)` : c.name, c.id));
+  let saved = '';
+  try { saved = localStorage.getItem(CALENDAR_KEY) || ''; } catch { /* storage blocked */ }
+  if (state.calendars.some((c) => c.id === saved)) select.value = saved;
+  select.hidden = state.calendars.length < 2;
+}
+
+async function fetchClasses() {
+  const date = state.date;
+  if (date > todayIso()) return;
+  const btn = $('calFetchBtn');
+  btn.disabled = true;
+  try {
+    if (!state.titles) {
+      try {
+        state.titles = await data.loadCalendarTitles();
+      } catch (err) {
+        throw new Error(`${err.message}. If this mentions att_calendar_titles, run supabase/08_calendar_titles.sql.`);
+      }
+    }
+    if (!hasCalendarToken()) calStatus('Asking Google for read-only access to your calendar…');
+    const token = await getCalendarToken(state.email);
+    if (!state.calendars.length) await loadCalendars(token);
+    if (!state.calendars.length) throw new Error('No calendars were found in your Google account.');
+
+    calStatus(`Reading ${prettyDate(date, { weekday: 'long', day: 'numeric', month: 'long' })} from your calendar…`);
+    const events = await classesOn(token, $('calSelect').value, date);
+    if (state.date !== date) return; // the student moved to another day meanwhile
+
+    let added = 0;
+    let skipped = 0;
+    const unmatched = [];
+    for (const e of events) {
+      const subjectId = subjectForTitle(e.title);
+      if (subjectId === null) { skipped += 1; continue; }
+      if (subjectId === undefined) { unmatched.push(e); continue; }
+      if (await addCalendarClass(subjectId, date, e)) added += 1;
+    }
+    state.unmatched = unmatched;
+    render();
+    renderMatch();
+
+    const isToday = date === todayIso();
+    const classes = events.length - skipped;
+    let msg;
+    if (!classes) {
+      msg = isToday ? 'No classes have started yet today in this calendar.' : 'No classes on this day in this calendar.';
+    } else {
+      msg = `Found ${classes} class${classes === 1 ? '' : 'es'}.`;
+      if (added) msg += ` ${added} added below with ${added === 1 ? 'its' : 'their'} times; mark each one Present or Absent.`;
+      if (classes - added - unmatched.length > 0 && !added) msg += ' They are already shown below.';
+      if (unmatched.length) msg += ` Choose the subject for ${unmatched.length === 1 ? 'one' : unmatched.length} of them below.`;
+    }
+    if (isToday) msg += ' Classes later today show up once they have started.';
+    calStatus(msg, 'ok');
+  } catch (err) {
+    calStatus(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Calendar event names not matched to a subject yet, one row per name.
+function renderMatch() {
+  const list = $('calMatchList');
+  list.textContent = '';
+  const byTitle = new Map();
+  for (const e of state.unmatched) {
+    const key = data.titleKey(e.title);
+    if (!byTitle.has(key)) byTitle.set(key, { title: e.title, events: [] });
+    byTitle.get(key).events.push(e);
+  }
+  $('calMatch').hidden = byTitle.size === 0;
+
+  for (const { title, events } of byTitle.values()) {
+    const li = el('li', 'cal-match-row');
+    const info = el('div', 'cal-match-info');
+    info.append(el('span', 'cal-match-title', title),
+      el('span', 'cal-match-time', events.map((e) => timeRange(e.startTime, e.endTime)).join(', ')));
+    const select = el('select');
+    select.setAttribute('aria-label', `Subject for ${title}`);
+    select.add(new Option('Choose a subject…', ''));
+    for (const s of state.subjects) select.add(new Option(subjectLabel(s), s.id));
+    select.add(new Option(`New subject: ${title.slice(0, 60)}`, '__new'));
+    select.add(new Option('Not a class', '__none'));
+    select.addEventListener('change', () => { if (select.value) resolveTitle(title, select.value, select); });
+    li.append(info, select);
+    list.appendChild(li);
+  }
+}
+
+// Saves the student's answer for an event name and adds its classes.
+async function resolveTitle(title, choice, select) {
+  select.disabled = true;
+  try {
+    let subjectId = choice === '__none' ? null : choice;
+    if (choice === '__new') {
+      const name = title.slice(0, 120);
+      try {
+        const created = await data.createSubject({ name, code: '', description: '' });
+        state.subjects.push(created);
+        state.subjects.sort((a, b) => a.name.localeCompare(b.name));
+        subjectId = created.id;
+      } catch (err) {
+        const same = state.subjects.find((s) => s.name.trim().toLowerCase() === name.trim().toLowerCase());
+        if (!same) throw err;
+        subjectId = same.id;
+      }
+    }
+    await data.saveCalendarTitle(title, subjectId);
+    const key = data.titleKey(title);
+    state.titles.set(key, subjectId);
+
+    const events = state.unmatched.filter((e) => data.titleKey(e.title) === key);
+    state.unmatched = state.unmatched.filter((e) => data.titleKey(e.title) !== key);
+    if (subjectId) for (const e of events) await addCalendarClass(subjectId, state.date, e);
+    render();
+    renderMatch();
+    const subject = state.subjects.find((s) => s.id === subjectId);
+    toast(subject ? `"${title}" is now ${subject.name}. Mark it below.` : `"${title}" will be skipped from now on.`);
+  } catch (err) {
+    select.disabled = false;
+    toast(`Could not save: ${err.message}`, true);
+  }
 }
 
 // ---------- target ----------
@@ -623,6 +820,14 @@ function wire() {
 
   $('targetInput').addEventListener('change', saveTarget);
 
+  $('calFetchBtn').addEventListener('click', fetchClasses);
+  $('calSelect').addEventListener('change', () => {
+    try { localStorage.setItem(CALENDAR_KEY, $('calSelect').value); } catch { /* storage blocked */ }
+    state.unmatched = [];
+    renderMatch();
+    fetchClasses();
+  });
+
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -634,6 +839,8 @@ function wire() {
 async function init() {
   const ctx = await startSignedInPage();
   if (!ctx) return;
+  state.email = ctx.user.email;
+  if (!isGoogleConfigured()) $('calBar').hidden = true;
   wire();
   try {
     Object.assign(state, await data.loadAll());

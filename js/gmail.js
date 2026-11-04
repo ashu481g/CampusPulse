@@ -1,71 +1,21 @@
 // gmail.js — reads the student's Gmail directly in their browser.
 //
-// Uses Google Identity Services to get a short-lived, read-only access
-// token (about an hour). The token is kept in memory only: it is never
-// saved or sent to CampusPulse's servers. Emails go from Gmail to this
-// page, and only their text is passed on for deadline extraction.
+// The read-only token comes from google-auth.js and stays in memory only.
+// Emails go from Gmail to this page, and only their text is passed on for
+// deadline extraction.
 
-import { GOOGLE_CLIENT_ID } from './google-config.js';
+import { getGoogleToken, forgetToken } from './google-auth.js';
 
 const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
-let gisReady = null;
-let cached = { token: null, expires: 0 };
 
-function loadGis() {
-  if (!gisReady) {
-    gisReady = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.async = true;
-      s.onload = resolve;
-      s.onerror = () => { gisReady = null; reject(new Error('Could not load Google sign-in. Check your connection or any ad blocker.')); };
-      document.head.appendChild(s);
-    });
-  }
-  return gisReady;
-}
-
-// Opens Google's consent pop-up the first time; reuses the token afterwards.
-// Must be called from a click, or browsers block the pop-up.
-export async function getGmailToken(hintEmail) {
-  if (cached.token && Date.now() < cached.expires - 60_000) return cached.token;
-  await loadGis();
-  return new Promise((resolve, reject) => {
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: SCOPE,
-      hint: hintEmail,
-      callback: (resp) => {
-        if (resp.error) { reject(new Error(resp.error_description || resp.error)); return; }
-        if (!window.google.accounts.oauth2.hasGrantedAllScopes(resp, SCOPE)) {
-          reject(new Error('Gmail access was not given. On the Google screen, tick the box that lets CampusPulse read your email.'));
-          return;
-        }
-        cached = { token: resp.access_token, expires: Date.now() + Number(resp.expires_in || 3600) * 1000 };
-        resolve(resp.access_token);
-      },
-      error_callback: (err) => {
-        const messages = {
-          popup_closed: 'The Google window was closed before access was given.',
-          popup_failed_to_open: 'The Google window was blocked. Allow pop-ups for this site and try again.',
-        };
-        reject(new Error(messages[err?.type] || err?.message || 'Google sign-in failed.'));
-      },
-    });
-    client.requestAccessToken();
-  });
-}
-
-export function disconnectGmail() {
-  if (cached.token && window.google?.accounts?.oauth2) window.google.accounts.oauth2.revoke(cached.token, () => {});
-  cached = { token: null, expires: 0 };
-}
+export const getGmailToken = (hintEmail) => getGoogleToken(SCOPE, hintEmail, 'read your email');
+export const disconnectGmail = () => forgetToken(SCOPE);
 
 async function gmail(token, path) {
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (res.status === 401) { cached = { token: null, expires: 0 }; throw new Error('Gmail access has expired. Press Scan again to reconnect.'); }
+  if (res.status === 401) { forgetToken(SCOPE); throw new Error('Gmail access has expired. Press Scan again to reconnect.'); }
   if (res.status === 403) {
     // Show Google's real reason instead of guessing.
     let reason = '';

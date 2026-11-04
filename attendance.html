@@ -76,6 +76,19 @@
       </div>
     </div>
     <p class="mark-date-label" id="markDateLabel"></p>
+    <div class="cal-bar" id="calBar">
+      <p class="cal-prompt" id="calPrompt">Fetch this day's classes from your Google Calendar, then mark each one Present or Absent.</p>
+      <div class="cal-actions">
+        <label class="visually-hidden" for="calSelect">Calendar to read</label>
+        <select id="calSelect" hidden></select>
+        <button type="button" class="btn-primary" id="calFetchBtn">Fetch classes</button>
+      </div>
+      <p class="scan-progress" id="calStatus" role="status" aria-live="polite" hidden></p>
+      <div class="cal-match" id="calMatch" hidden>
+        <p class="cal-match-lead">Which subject is each of these? Your answer is remembered for next time.</p>
+        <ul class="cal-match-list" id="calMatchList"></ul>
+      </div>
+    </div>
     <ul class="mark-list" id="markList"></ul>
     <p class="upcoming-empty" id="markEmpty" hidden>Add your first subject to start marking attendance.</p>
   </section>

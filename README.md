@@ -45,7 +45,7 @@ js/app.js             home page logic
 js/deadlines-data.js  reads/writes the deadlines table (only module that does)
 js/deadline-format.js due-date wording, categories, date helpers
 js/deadlines-page.js  deadlines page logic
-js/attendance-data.js reads/writes att_subjects, att_records, att_settings
+js/attendance-data.js reads/writes att_subjects, att_records, att_settings, att_calendar_titles
 js/attendance-calc.js attendance %, can-miss / must-attend maths
 js/attendance-page.js attendance page logic
 js/reminders-data.js  reminder_settings + test-email call
@@ -53,8 +53,10 @@ js/reminders-page.js  reminders page logic
 js/competitions-data.js  case_competitions + linked key dates
 js/competition-stages.js stage/outcome names, date suggestions
 js/competitions-page.js  competitions page logic
-js/google-config.js   Google OAuth Client ID for Gmail (public)
-js/gmail.js           reads Gmail in the browser (read-only token, memory only)
+js/google-config.js   Google OAuth Client ID for Gmail and Calendar (public)
+js/google-auth.js     short-lived read-only Google tokens (memory only)
+js/gmail.js           reads Gmail in the browser
+js/calendar.js        reads one day's classes from Google Calendar in the browser
 js/email-data.js      suggestions, extract-deadlines call, accept/dismiss
 js/email-page.js      From email page logic
 supabase/01_auth.sql       Part 1: profiles, domain rule, security
@@ -64,6 +66,7 @@ supabase/04_reminders.sql  Part 4: reminder settings, Vault secrets, hourly sche
 supabase/05_competitions.sql Part 5: case_competitions, deadlines.competition_id
 supabase/06_email_import.sql Part 6: email_suggestions, email_processed
 supabase/07_attendance_classes.sql Part 3b: several classes per day, class timings
+supabase/08_calendar_titles.sql Part 3c: calendar event name -> subject choices
 supabase/functions/extract-deadlines/index.ts  Edge Function: emails -> OpenRouter -> suggestions
 supabase/functions/daily-reminders/index.ts  Edge Function that builds and sends the emails
 ```
@@ -114,6 +117,21 @@ Existing marks become class 1 with no time. On the Attendance page, each
 subject shows its classes for the chosen day, each with a time and
 Present/Absent; "+ Another class today" adds one. Every class counts
 separately towards the percentage. Times can also be edited in History.
+
+Classes from Google Calendar: run `supabase/08_calendar_titles.sql` once
+(after 03). On the Attendance page, "Fetch classes" reads the chosen day
+from the student's Google Calendar in their browser (scope
+`calendar.readonly`, token in memory only, nothing stored on the server).
+Only past days and today are read, and today only up to now: a class
+appears once it has started. All-day, cancelled and declined events are
+skipped. Each event is matched to a subject by the student's earlier answer
+(`att_calendar_titles`), else by a subject name or code in its title; any
+others are listed so the student picks a subject, creates one, or marks it
+"not a class", which is remembered. Matched classes appear with their times,
+ready for Present/Absent; nothing is marked automatically. Once access is
+given, moving to another day fetches it by itself. Setup: enable the Google
+Calendar API in Google Cloud and add the `calendar.readonly` scope to the
+OAuth consent screen (Data access).
 
 Old data from the Attendance Register app: export a backup there and use
 "import the backup file" at the bottom of the Attendance page. Subjects are

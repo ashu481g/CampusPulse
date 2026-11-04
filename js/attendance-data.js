@@ -1,5 +1,5 @@
 // attendance-data.js — the only module that reads or writes the
-// att_subjects, att_records and att_settings tables.
+// att_subjects, att_records, att_settings and att_calendar_titles tables.
 
 import { supabase } from './supabaseClient.js';
 import { DEFAULT_TARGET } from './attendance-calc.js';
@@ -116,6 +116,22 @@ export async function deleteRecord(id) {
 export async function saveTarget(targetPercent) {
   check(await supabase.from('att_settings')
     .upsert({ target_percent: targetPercent }, { onConflict: 'user_id' }));
+}
+
+// ---------- calendar event names ----------
+
+// The same event name, however it is spaced or capitalised.
+export const titleKey = (title) => title.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 300);
+
+// Map of title key -> subject id, or null for "not a class".
+export async function loadCalendarTitles() {
+  const rows = check(await supabase.from('att_calendar_titles').select('title_key,subject_id'));
+  return new Map(rows.map((r) => [r.title_key, r.subject_id]));
+}
+
+export async function saveCalendarTitle(title, subjectId) {
+  check(await supabase.from('att_calendar_titles')
+    .upsert({ title_key: titleKey(title), subject_id: subjectId }, { onConflict: 'user_id,title_key' }));
 }
 
 // ---------- import from the Attendance Register app's backup file ----------
